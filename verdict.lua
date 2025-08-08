@@ -38,9 +38,6 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- // Tab Main
-local Main = Window:CreateTab("Main", 4483362458)
-
 -- // Notify helper
 local function notify(msg)
     Rayfield:Notify({
@@ -52,8 +49,10 @@ local function notify(msg)
 end
 
 ---------------------------------------------------------------------
---                           TOGGLES (Main)
+--                           TAB MAIN
 ---------------------------------------------------------------------
+
+local Main = Window:CreateTab("Main", 4483362458)
 
 -- God Mode
 Main:CreateToggle({
@@ -259,7 +258,7 @@ Main:CreateToggle({
 })
 
 ---------------------------------------------------------------------
---                    TAB TELEPORT
+--                           TAB TELEPORT
 ---------------------------------------------------------------------
 
 local TeleportTab = Window:CreateTab("Teleport", 4483362458)
@@ -328,7 +327,7 @@ TeleportTab:CreateButton({
 })
 
 ---------------------------------------------------------------------
---      Save & Teleport Pos (Efisien)
+--      Save & Teleport Pos
 ---------------------------------------------------------------------
 
 local savedSlots = { nil, nil, nil, nil, nil }
@@ -359,7 +358,7 @@ local function clearAllSlots()
     notify("Semua slot dibersihkan.")
 end
 
-TeleportTab:CreateSection("Save & Teleport Pos (Efisien)")
+TeleportTab:CreateSection("Save & Teleport Pos")
 TeleportTab:CreateDropdown({
     Name = "Pilih Slot",
     Options = {"1","2","3","4","5"},
@@ -374,3 +373,75 @@ TeleportTab:CreateButton({ Name = "Save Pos", Callback = function() saveSlot(sel
 TeleportTab:CreateButton({ Name = "Teleport Pos", Callback = function() teleportSlot(selectedSlot) end })
 TeleportTab:CreateButton({ Name = "Clear Slot", Callback = function() clearSlot(selectedSlot) end })
 TeleportTab:CreateButton({ Name = "Clear All Slots", Callback = function() clearAllSlots() end })
+
+---------------------------------------------------------------------
+--                           TAB MISC (Spectate)
+---------------------------------------------------------------------
+
+local MiscTab = Window:CreateTab("Misc", 4483362458)
+MiscTab:CreateSection("Spectate Player")
+
+local spectateTarget
+local viewDiedConn, viewChangedConn
+
+local SpectateDropdown = MiscTab:CreateDropdown({
+    Name = "Pilih Pemain",
+    Options = getOtherPlayerNames(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "SpectateDropdown",
+    Callback = function(option)
+        if typeof(option) == "table" then
+            spectateTarget = option[1]
+        else
+            spectateTarget = option
+        end
+    end,
+})
+
+Players.PlayerAdded:Connect(function()
+    SpectateDropdown:Refresh(getOtherPlayerNames(), true)
+end)
+Players.PlayerRemoving:Connect(function()
+    SpectateDropdown:Refresh(getOtherPlayerNames(), true)
+end)
+
+MiscTab:CreateButton({
+    Name = "Mulai Spectate",
+    Callback = function()
+        if not spectateTarget then
+            notify("Pilih pemain terlebih dahulu.")
+            return
+        end
+        local target = Players:FindFirstChild(spectateTarget)
+        if not target or not target.Character then
+            notify("Pemain tidak valid atau belum spawn.")
+            return
+        end
+
+        workspace.CurrentCamera.CameraSubject = target.Character
+
+        if viewDiedConn then viewDiedConn:Disconnect() end
+        if viewChangedConn then viewChangedConn:Disconnect() end
+
+        viewDiedConn = target.CharacterAdded:Connect(function()
+            repeat task.wait() until target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            workspace.CurrentCamera.CameraSubject = target.Character
+        end)
+        viewChangedConn = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+            workspace.CurrentCamera.CameraSubject = target.Character
+        end)
+
+        notify("Spectating: " .. spectateTarget)
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Berhenti Spectate",
+    Callback = function()
+        if viewDiedConn then viewDiedConn:Disconnect() end
+        if viewChangedConn then viewChangedConn:Disconnect() end
+        workspace.CurrentCamera.CameraSubject = getHumanoid()
+        notify("Spectate dihentikan.")
+    end
+})
