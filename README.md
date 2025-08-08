@@ -17,15 +17,6 @@ Desainnya minimalis namun fungsional, sehingga mudah dipahami dan dimodifikasi.
 ## ✨ Features
 - 📌 **Lightweight** — Script kecil & mudah dipahami.
 - ⚡ **Fast Execution** — Perintah berjalan cepat tanpa delay besar.
-- 🛠 **Customizable** — Mudah dimodifikasi sesuai kebutuhan.
-
----
-
-## 📂 Installation
-1. Salin script dari file `verdict.lua`.
-2. Buka Roblox exploit executor favorit Anda.
-3. Paste script tersebut.
-4. Tekan **Execute** dan nikmati fiturnya.
 
 ---
 
