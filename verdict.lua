@@ -185,53 +185,50 @@ local function CreateUI()
         end
     })
 
--- cfly
+-- CFly (Head Anchor Method, Speed 50)
 flags.cframeFly = false
-local flyConn
+local CFloop
 
 Main:CreateToggle({
     Name = "CFly",
     CurrentValue = false,
     Callback = function(enabled)
         flags.cframeFly = enabled
-        if flyConn then flyConn:Disconnect() flyConn = nil end
+        if CFloop then CFloop:Disconnect() CFloop = nil end
 
-        local humanoid = getHumanoid()
-        if humanoid then humanoid.PlatformStand = enabled end
+        local char = getCharacter()
+        local hum = getHumanoid()
+        local head = char and char:FindFirstChild("Head")
 
         if enabled then
-            local speed = 50
-            flyConn = RunService.Heartbeat:Connect(function(dt)
-                local hrp = getHRP()
-                if not hrp then return end
-                local camCF = Workspace.CurrentCamera.CFrame
-                local moveDir = Vector3.zero
+            if hum then hum.PlatformStand = true end
+            if head then head.Anchored = true end
 
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                    moveDir += camCF.LookVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                    moveDir -= camCF.LookVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                    moveDir -= camCF.RightVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                    moveDir += camCF.RightVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                    moveDir += Vector3.new(0, 1, 0)
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                    moveDir -= Vector3.new(0, 1, 0)
-                end
+            local CFspeed = 50
+            CFloop = RunService.Heartbeat:Connect(function(deltaTime)
+                if not char or not hum or not head then return end
 
-                if moveDir.Magnitude > 0 then
-                    hrp.CFrame = hrp.CFrame + (moveDir.Unit * speed * dt)
-                end
+                local moveDirection = hum.MoveDirection * (CFspeed * deltaTime)
+                local headCFrame = head.CFrame
+                local cameraCFrame = Workspace.CurrentCamera.CFrame
+
+                local cameraOffset = headCFrame:ToObjectSpace(cameraCFrame).Position
+                cameraCFrame = cameraCFrame * CFrame.new(-cameraOffset.X, -cameraOffset.Y, -cameraOffset.Z + 1)
+
+                local cameraPosition = cameraCFrame.Position
+                local headPosition = headCFrame.Position
+
+                local objectSpaceVelocity = CFrame.new(
+                    cameraPosition,
+                    Vector3.new(headPosition.X, cameraPosition.Y, headPosition.Z)
+                ):VectorToObjectSpace(moveDirection)
+
+                head.CFrame = CFrame.new(headPosition) * (cameraCFrame - cameraPosition) * CFrame.new(objectSpaceVelocity)
             end)
             notify("CFly: ON")
         else
+            if hum then hum.PlatformStand = false end
+            if head then head.Anchored = false end
             notify("CFly: OFF")
         end
     end
