@@ -9,9 +9,9 @@ local LocalPlayer = Players.LocalPlayer
 
 -- General state
 local lastPlace = nil
-local conns = {}          -- store active connections
-local windows = {}        -- refs for created UI elements (Window/Tabs)
-local flags = {}          -- feature flags
+local conns = {} -- store active connections
+local windows = {} -- refs for created UI elements (Window/Tabs)
+local flags = {} -- feature flags
 local originalLighting = {}
 local customSpeed = 16
 
@@ -68,15 +68,10 @@ local Rayfield = nil
 local function notify(msg)
     if Rayfield and Rayfield.Notify then
         pcall(function()
-            Rayfield:Notify({
-                Title = "Info",
-                Content = tostring(msg),
-                Duration = 3,
-                Image = 4483362458
-            })
+            Rayfield:Notify({ Title = "Info", Content = tostring(msg), Duration = 3, Image = 4483362458 })
         end)
     else
-        warn("[Verdict] "..tostring(msg))
+        warn("[Verdict] " .. tostring(msg))
     end
 end
 
@@ -94,8 +89,10 @@ end
 
 -- UI & Feature init
 local function CreateUI()
+    -- Load Rayfield
     Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
+    -- Create Window
     local Window = Rayfield:CreateWindow({
         Name = "Verdict",
         LoadingTitle = "Verdict",
@@ -173,6 +170,73 @@ local function CreateUI()
         end
     })
 
+    Main:CreateSlider({
+        Name = "Speed Value",
+        Range = {16, 200},
+        Increment = 1,
+        Suffix = "Speed",
+        CurrentValue = 16,
+        Callback = function(value)
+            customSpeed = value
+            if flags.speedHack then
+                local hum = getHumanoid()
+                if hum then hum.WalkSpeed = customSpeed end
+            end
+        end
+    })
+
+    -- CFrame Fly (Speed 50)
+    flags.cframeFly = false
+    local flyConn
+    Main:CreateToggle({
+        Name = "CFrame Fly (Speed 50)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.cframeFly = enabled
+            if flyConn then flyConn:Disconnect() flyConn = nil end
+
+            if enabled then
+                local speed = 50
+                local humanoid = getHumanoid()
+                if humanoid then humanoid.PlatformStand = true end
+                flyConn = RunService.Heartbeat:Connect(function()
+                    local hrp = getHRP()
+                    if not hrp then return end
+                    local camCF = Workspace.CurrentCamera.CFrame
+                    local moveDir = Vector3.zero
+
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        moveDir += camCF.LookVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        moveDir -= camCF.LookVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        moveDir -= camCF.RightVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        moveDir += camCF.RightVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        moveDir += Vector3.new(0, 1, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        moveDir -= Vector3.new(0, 1, 0)
+                    end
+
+                    if moveDir.Magnitude > 0 then
+                        hrp.CFrame = hrp.CFrame + (moveDir.Unit * speed * RunService.Heartbeat:Wait())
+                    end
+                end)
+                notify("CFrame Fly: ON")
+            else
+                local humanoid = getHumanoid()
+                if humanoid then humanoid.PlatformStand = false end
+                notify("CFrame Fly: OFF")
+            end
+        end
+    })
+
     -- Infinite Jump
     Main:CreateToggle({
         Name = "Infinite Jump",
@@ -240,44 +304,312 @@ local function CreateUI()
         end
     })
 
-    -- CFrame Fly (fixed speed 50)
-    local CFspeed = 50
-    Main:CreateToggle({
-        Name = "CFrame Fly",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.cframeFly = enabled
-            clearConn("cframeFly")
-            local char = getCharacter()
-            local humanoid = getHumanoid()
-            local head = char and char:FindFirstChild("Head")
-            if enabled then
-                if humanoid then humanoid.PlatformStand = true end
-                if head then head.Anchored = true end
-                setConn("cframeFly", RunService.Heartbeat:Connect(function(deltaTime)
-                    if not char or not head then return end
-                    local moveDirection = humanoid.MoveDirection * (CFspeed * deltaTime)
-                    local headCFrame = head.CFrame
-                    local cameraCFrame = workspace.CurrentCamera.CFrame
-                    local cameraOffset = headCFrame:ToObjectSpace(cameraCFrame).Position
-                    cameraCFrame = cameraCFrame * CFrame.new(-cameraOffset.X, -cameraOffset.Y, -cameraOffset.Z + 1)
-                    local cameraPosition = cameraCFrame.Position
-                    local headPosition = headCFrame.Position
-                    local objectSpaceVelocity = CFrame.new(cameraPosition, Vector3.new(headPosition.X, cameraPosition.Y, headPosition.Z))
-                        :VectorToObjectSpace(moveDirection)
-                    head.CFrame = CFrame.new(headPosition) * (cameraCFrame - cameraPosition) * CFrame.new(objectSpaceVelocity)
-                end))
-                notify("CFrame Fly: ON")
+    -- TELEPORT TAB
+    local TeleportTab = Window:CreateTab("Teleport", 4483362458)
+    windows.Teleport = TeleportTab
+
+    TeleportTab:CreateSection("Pilih pemain untuk teleport")
+    local selectedPlayerName = nil
+    local function playerOptions()
+        return sortedPlayerNames()
+    end
+
+    local PlayerDropdown = TeleportTab:CreateDropdown({
+        Name = "Pilih Pemain",
+        Options = playerOptions(),
+        CurrentOption = {},
+        MultipleOptions = false,
+        Flag = "TeleportPlayerDropdown",
+        Callback = function(option)
+            selectedPlayerName = (typeof(option) == "table" and option[1]) or option
+        end,
+    })
+
+    setConn("playerAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() PlayerDropdown:Refresh(playerOptions(), true) end)
+    end))
+    setConn("playerRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() PlayerDropdown:Refresh(playerOptions(), true) end)
+    end))
+
+    TeleportTab:CreateButton({
+        Name = "Teleport ke Pemain",
+        Callback = function()
+            if not selectedPlayerName or selectedPlayerName == "" then
+                notify("Pilih pemain terlebih dahulu.")
+                return
+            end
+            local target = Players:FindFirstChild(selectedPlayerName)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = getHRP()
+                if hrp then
+                    hrp.CFrame = CFrame.new(target.Character.HumanoidRootPart.Position + Vector3.new(0,3,0))
+                    notify("Kamu ditransfer ke "..selectedPlayerName)
+                end
             else
-                if humanoid then humanoid.PlatformStand = false end
-                if head then head.Anchored = false end
-                notify("CFrame Fly: OFF")
+                notify("Pemain tidak valid atau belum spawn.")
             end
         end
     })
+
+    TeleportTab:CreateButton({
+        Name = "Refresh List",
+        Callback = function()
+            PlayerDropdown:Refresh(playerOptions(), true)
+            notify("Daftar pemain diperbarui.")
+        end
+    })
+
+    -- Save & Teleport Pos
+    TeleportTab:CreateSection("Save & Teleport Pos")
+    local savedSlots = { nil, nil, nil, nil, nil }
+    local slotSelected = 1
+
+    local SlotDropdown = TeleportTab:CreateDropdown({
+        Name = "Pilih Slot",
+        Options = {"1","2","3","4","5"},
+        CurrentOption = {"1"},
+        MultipleOptions = false,
+        Flag = "SlotDropdown",
+        Callback = function(opt)
+            slotSelected = tonumber((typeof(opt) == "table" and opt[1]) or opt) or 1
+        end
+    })
+
+    TeleportTab:CreateButton({ Name = "Save Pos", Callback = function()
+        local hrp = getHRP()
+        if hrp then
+            savedSlots[slotSelected] = hrp.Position
+            notify(("Posisi tersimpan di Slot %d."):format(slotSelected))
+        else
+            notify("Karakter tidak ditemukan.")
+        end
+    end })
+
+    TeleportTab:CreateButton({ Name = "Teleport Pos", Callback = function()
+        if savedSlots[slotSelected] then
+            local hrp = getHRP()
+            if hrp then
+                hrp.CFrame = CFrame.new(savedSlots[slotSelected] + Vector3.new(0,5,0))
+                notify(("Teleport ke Slot %d."):format(slotSelected))
+            end
+        else
+            notify(("Slot %d kosong."):format(slotSelected))
+        end
+    end })
+
+    TeleportTab:CreateButton({ Name = "Clear Slot", Callback = function()
+        savedSlots[slotSelected] = nil
+        notify(("Slot %d dibersihkan."):format(slotSelected))
+    end })
+
+    TeleportTab:CreateButton({ Name = "Clear All Slots", Callback = function()
+        for i=1,5 do savedSlots[i] = nil end
+        notify("Semua slot dibersihkan.")
+    end })
+
+    -- MISC TAB
+    local MiscTab = Window:CreateTab("Misc", 4483362458)
+    windows.Misc = MiscTab
+
+    MiscTab:CreateSection("Spectate Player")
+    local spectateTargetName = nil
+    local viewDiedConn = nil
+    local viewChangedConn = nil
+
+    local SpectateDropdown = MiscTab:CreateDropdown({
+        Name = "Pilih Pemain",
+        Options = sortedPlayerNames(),
+        CurrentOption = {},
+        MultipleOptions = false,
+        Flag = "SpectateDropdown",
+        Callback = function(opt)
+            spectateTargetName = (typeof(opt) == "table" and opt[1]) or opt
+        end
+    })
+
+    setConn("specAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
+    end))
+    setConn("specRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
+    end))
+
+    MiscTab:CreateButton({
+        Name = "Mulai Spectate",
+        Callback = function()
+            if not spectateTargetName or spectateTargetName == "" then
+                notify("Pilih pemain terlebih dahulu.")
+                return
+            end
+            local target = Players:FindFirstChild(spectateTargetName)
+            if not target or not target.Character then
+                notify("Pemain tidak valid atau belum spawn.")
+                return
+            end
+
+            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
+            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
+
+            Workspace.CurrentCamera.CameraSubject = target.Character
+            viewDiedConn = target.CharacterAdded:Connect(function()
+                repeat task.wait() until target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+                Workspace.CurrentCamera.CameraSubject = target.Character
+            end)
+            viewChangedConn = Workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+                if target and target.Character then
+                    Workspace.CurrentCamera.CameraSubject = target.Character
+                end
+            end)
+            notify("Spectating: "..spectateTargetName)
+        end
+    })
+
+    MiscTab:CreateButton({
+        Name = "Berhenti Spectate",
+        Callback = function()
+            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
+            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
+            local char = getCharacter()
+            if char then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    Workspace.CurrentCamera.CameraSubject = humanoid
+                else
+                    Workspace.CurrentCamera.CameraSubject = char
+                end
+            end
+            notify("Spectate dihentikan.")
+        end
+    })
+
+    -- FISH IT TAB
+    local function AddFishItTab()
+        if game.PlaceId ~= 121864768012064 then return end
+        if windows.FishIt then return end
+        notify("Game terdeteksi: Fish It. Tab khusus aktif!")
+
+        local ok, netRoot = pcall(function()
+            return ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")
+                :WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+        end)
+        if not ok or not netRoot then
+            notify("Gagal menemukan modul 'net' di ReplicatedStorage.")
+            return
+        end
+
+        local FishItTab = Window:CreateTab("Fish It", "fish")
+        windows.FishIt = FishItTab
+
+        flags.autofish = false
+        flags.perfectCast = true
+
+        local equipRemote = netRoot:FindFirstChild("RE/EquipToolFromHotbar")
+        local rodRemote = netRoot:FindFirstChild("RF/ChargeFishingRod")
+        local miniGameRemote = netRoot:FindFirstChild("RF/RequestFishingMinigameStarted")
+        local finishRemote = netRoot:FindFirstChild("RE/FishingCompleted")
+
+        FishItTab:CreateToggle({
+            Name = "Enable Auto Fish",
+            CurrentValue = false,
+            Callback = function(val)
+                flags.autofish = val
+                if val then
+                    task.spawn(function()
+                        while flags.autofish do
+                            if equipRemote and rodRemote and miniGameRemote and finishRemote then
+                                pcall(function()
+                                    equipRemote:FireServer(1)
+                                    task.wait(0.12)
+                                    local timestamp = flags.perfectCast and 9999999999 or tick()
+                                    rodRemote:InvokeServer(timestamp)
+                                    task.wait(0.12)
+                                    local x, y = -1.238, 0.969
+                                    if not flags.perfectCast then
+                                        x = math.random(-1000,1000)/1000
+                                        y = math.random(0,1000)/1000
+                                    end
+                                    miniGameRemote:InvokeServer(x, y)
+                                    task.wait(1.3)
+                                    finishRemote:FireServer()
+                                end)
+                            else
+                                notify("Remote fishing tidak lengkap (path/nama mungkin berubah).")
+                                flags.autofish = false
+                                break
+                            end
+                            for i=1,14 do
+                                if not flags.autofish then break end
+                                task.wait(0.1)
+                            end
+                        end
+                    end)
+                    notify("AutoFish: ON")
+                else
+                    notify("AutoFish: OFF")
+                end
+            end
+        })
+
+        FishItTab:CreateToggle({
+            Name = "Use Perfect Cast",
+            CurrentValue = true,
+            Callback = function(v) flags.perfectCast = v end
+        })
+
+        local islandCoords = {
+            { name = "Weather Machine", position = Vector3.new(-1471, -3, 1929) },
+            { name = "Esoteric Depths", position = Vector3.new(3157, -1303, 1439) },
+            { name = "Tropical Grove", position = Vector3.new(-2038, 3, 3650) },
+            { name = "Stingray Shores", position = Vector3.new(-32, 4, 2773) },
+            { name = "Kohana Volcano", position = Vector3.new(-519, 24, 189) },
+            { name = "Coral Reefs", position = Vector3.new(-3095, 1, 2177) },
+            { name = "Crater Island", position = Vector3.new(968, 1, 4854) },
+            { name = "Kohana", position = Vector3.new(-658, 3, 719) },
+            { name = "Winter Fest", position = Vector3.new(1611, 4, 3280) },
+            { name = "Isoteric Island", position = Vector3.new(1987, 4, 1400) },
+            { name = "Treasure Hall", position = Vector3.new(-3600, -267, -1558) },
+            { name = "Lost Shore", position = Vector3.new(-3663, 38, -989) },
+        }
+        table.sort(islandCoords, function(a,b) return a.name < b.name end)
+        local islandNames, nameToPos = {}, {}
+        for _, info in ipairs(islandCoords) do
+            table.insert(islandNames, info.name)
+            nameToPos[info.name] = info.position
+        end
+
+        FishItTab:CreateDropdown({
+            Name = "Pilih Island",
+            Options = islandNames,
+            CurrentOption = {},
+            MultipleOptions = false,
+            Flag = "FishItIslandDropdown",
+            Callback = function(option)
+                local chosen = (typeof(option) == "table" and option[1]) or option
+                if not chosen then
+                    notify("Pilih island terlebih dahulu.")
+                    return
+                end
+                local pos = nameToPos[chosen]
+                if not pos then
+                    notify("Island tidak ditemukan: " .. tostring(chosen))
+                    return
+                end
+                local hrp = getHRP()
+                if hrp then
+                    hrp.CFrame = CFrame.new(pos + Vector3.new(0,5,0))
+                    notify("Teleport ke " .. chosen)
+                else
+                    notify("HumanoidRootPart tidak ditemukan.")
+                end
+            end
+        })
+    end
+
+    AddFishItTab()
 end
 
--- Monitor PlaceId changes
+-- ===== Monitor PlaceId changes & reload UI =====
 task.spawn(function()
     while task.wait(1.5) do
         if game.PlaceId ~= lastPlace then
