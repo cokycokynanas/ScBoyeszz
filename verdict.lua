@@ -185,57 +185,57 @@ local function CreateUI()
         end
     })
 
-    -- CFrame Fly (Speed 50)
-    flags.cframeFly = false
-    local flyConn
-    Main:CreateToggle({
-        Name = "CFly",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.cframeFly = enabled
-            if flyConn then flyConn:Disconnect() flyConn = nil end
+-- cfly
+flags.cframeFly = false
+local flyConn
 
-            if enabled then
-                local speed = 50
-                local humanoid = getHumanoid()
-                if humanoid then humanoid.PlatformStand = true end
-                flyConn = RunService.Heartbeat:Connect(function()
-                    local hrp = getHRP()
-                    if not hrp then return end
-                    local camCF = Workspace.CurrentCamera.CFrame
-                    local moveDir = Vector3.zero
+Main:CreateToggle({
+    Name = "CFly",
+    CurrentValue = false,
+    Callback = function(enabled)
+        flags.cframeFly = enabled
+        if flyConn then flyConn:Disconnect() flyConn = nil end
 
-                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                        moveDir += camCF.LookVector
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                        moveDir -= camCF.LookVector
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                        moveDir -= camCF.RightVector
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                        moveDir += camCF.RightVector
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                        moveDir += Vector3.new(0, 1, 0)
-                    end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                        moveDir -= Vector3.new(0, 1, 0)
-                    end
+        local humanoid = getHumanoid()
+        if humanoid then humanoid.PlatformStand = enabled end
 
-                    if moveDir.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + (moveDir.Unit * speed * RunService.Heartbeat:Wait())
-                    end
-                end)
-                notify("CFly: ON")
-            else
-                local humanoid = getHumanoid()
-                if humanoid then humanoid.PlatformStand = false end
-                notify("CFly: OFF")
-            end
+        if enabled then
+            local speed = 50
+            flyConn = RunService.Heartbeat:Connect(function(dt)
+                local hrp = getHRP()
+                if not hrp then return end
+                local camCF = Workspace.CurrentCamera.CFrame
+                local moveDir = Vector3.zero
+
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDir += camCF.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDir -= camCF.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDir -= camCF.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDir += camCF.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDir += Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    moveDir -= Vector3.new(0, 1, 0)
+                end
+
+                if moveDir.Magnitude > 0 then
+                    hrp.CFrame = hrp.CFrame + (moveDir.Unit * speed * dt)
+                end
+            end)
+            notify("CFly: ON")
+        else
+            notify("CFly: OFF")
         end
-    })
+    end
+})
 
     -- Infinite Jump
     Main:CreateToggle({
