@@ -189,7 +189,7 @@ local function CreateUI()
     flags.cframeFly = false
     local flyConn
     Main:CreateToggle({
-        Name = "CFrame Fly (Speed 50)",
+        Name = "CFly",
         CurrentValue = false,
         Callback = function(enabled)
             flags.cframeFly = enabled
@@ -228,11 +228,11 @@ local function CreateUI()
                         hrp.CFrame = hrp.CFrame + (moveDir.Unit * speed * RunService.Heartbeat:Wait())
                     end
                 end)
-                notify("CFrame Fly: ON")
+                notify("CFly: ON")
             else
                 local humanoid = getHumanoid()
                 if humanoid then humanoid.PlatformStand = false end
-                notify("CFrame Fly: OFF")
+                notify("CFly: OFF")
             end
         end
     })
