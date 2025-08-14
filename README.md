@@ -1,11 +1,11 @@
-# ⚡ Verdict
+# ⚡ SimpleBloxGUI
 
 > *Just a simple Roblox exploit script.*
 
 ---
 
-## 📜 Overview
-**Verdict** adalah script exploit Roblox sederhana yang dibuat untuk tujuan edukasi dan eksperimen.  
+## 📜 SimpleBloxGUI
+**SimpleBloxGUI** adalah script exploit Roblox sederhana yang dibuat untuk tujuan edukasi dan eksperimen.  
 Desainnya minimalis namun fungsional, sehingga mudah dipahami dan dimodifikasi.
 
 > ⚠ **Disclaimer:**  
@@ -22,4 +22,4 @@ Desainnya minimalis namun fungsional, sehingga mudah dipahami dan dimodifikasi.
 
 ## 📜 Example Usage
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Verdial/Verdict/refs/heads/main/verdict.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/BangsNgek/SimpleBloxGUI/refs/heads/main/verdict.lua"))()
