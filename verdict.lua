@@ -71,7 +71,7 @@ local function notify(msg)
             Rayfield:Notify({ Title = "Info", Content = tostring(msg), Duration = 3, Image = 4483362458 })
         end)
     else
-        warn("[Verdict] " .. tostring(msg))
+        warn("[SimpleBloxGUI] " .. tostring(msg))
     end
 end
 
@@ -94,8 +94,8 @@ local function CreateUI()
 
     -- Create Window
     local Window = Rayfield:CreateWindow({
-        Name = "Verdict",
-        LoadingTitle = "Verdict",
+        Name = "SimpleBloxGUI",
+        LoadingTitle = "SimpleBloxGUI",
         LoadingSubtitle = "Just a Simple Script ♡",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
@@ -359,12 +359,12 @@ Main:CreateToggle({
 
     -- Save & Teleport Pos
     TeleportTab:CreateSection("Save & Teleport Pos")
-    local savedSlots = { nil, nil, nil, nil, nil }
+    local savedSlots = { nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil }
     local slotSelected = 1
 
     local SlotDropdown = TeleportTab:CreateDropdown({
         Name = "Pilih Slot",
-        Options = {"1","2","3","4","5"},
+        Options = {"1","2","3","4","5", "6", "7", "8", "9", "10", "11", "12"},
         CurrentOption = {"1"},
         MultipleOptions = false,
         Flag = "SlotDropdown",
