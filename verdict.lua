@@ -409,61 +409,7 @@ Main:CreateToggle({
     local MiscTab = Window:CreateTab("Misc", 4483362458)
     windows.Misc = MiscTab
     
-    MiscTab:CreateSection("Gendong Player")
     
-    local gendongPlayerName = nil
-    local function gplayerOptions()
-        return sortedPlayerNames() or {}
-    end
-    local GendongDropdown = MiscTab:CreateDropdown({
-        Name = "Pilih Pemain",
-        Options = gplayerOptions(),
-        CurrentOption = {},
-        MultipleOptions = false,
-        Flag = "GendongPlayerDropdown",
-        Callback = function(option)
-            gendongPlayerName = (typeof(option) == "table" and option[1]) or option
-        end,
-    })
-
-    setConn("playerAdd", Players.PlayerAdded:Connect(function()
-        pcall(function() GendongDropdown:Refresh(gplayerOptions(), true) end)
-    end))
-    setConn("playerRem", Players.PlayerRemoving:Connect(function()
-        pcall(function() GendongDropdown:Refresh(gplayerOptions(), true) end)
-    end))
-    local gendong = pcall(function()
-        return ReplicatedStorage:WaitForChild("CarryRequest")
-    end)
-    MiscTab:CreateButton({
-        Name = "Gendong Player",
-        Callback = function()
-            if not gendongPlayerName or gendongPlayerName == "" then
-                notify("Pilih pemain terlebih dahulu.")
-                return
-            end
-            local target = Players:FindFirstChild(gendongPlayerName)
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                --local tPlayer = { gendongPlayerName }
-                local checkStatuss = true
-                if checkStatuss then
-                    --:WaitForChild("CarryRequest"):FireServer(gendongPlayerName)
-                    local SOME_2 = game:GetService("ReplicatedStorage"):WaitForChild("PerPlayerEvents"):WaitForChild(gendongPlayerName)
-                notify("Permintaan Gendong Telah Dikirim ke "..gendongPlayerName)
-                end
-            else
-                notify("Pemain tidak valid atau belum spawn.")
-            end
-        end
-    })
-
-    MiscTab:CreateButton({
-        Name = "Refresh List",
-        Callback = function()
-            GendongDropdown:Refresh(gplayerOptions(), true)
-            notify("Daftar pemain diperbarui.")
-        end
-    })
     
     --GB CKPTW
     MiscTab:CreateSection("GB Gunung CKPTW")
