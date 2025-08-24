@@ -11,7 +11,7 @@
 ]]
 
 if debugX then
-	warn('Initialising Rayfield')
+	warn('Initialising BangsNgek Tools')
 end
 
 local function getService(name)
@@ -1621,7 +1621,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 	LoadingFrame.Subtitle.TextTransparency = 1
 
 	if Settings.ShowText then
-		MPrompt.Title.Text = 'Show '..Settings.ShowText
+		MPrompt.Title.Text = 'Show Tools'
 	end
 
 	LoadingFrame.Version.TextTransparency = 1
