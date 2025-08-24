@@ -468,12 +468,14 @@ Main:CreateToggle({
     --GB CKPTW
     MiscTab:CreateSection("GB Gunung CKPTW")
     MiscTab:CreateButton({
-       Name = "GB Summit CKPTW" ,
+       Name = "GB Summit CKPTW",
        Callback = function()
             local hrp = getHRP()
             if hrp then
                 hrp.CFrame = CFrame.new(Vector3.new(1815, 1983, 2168) + Vector3.new(0,5,0))
                 notify("Teleport ke Summit")
+            else
+                notify("HumanoidRootPart tidak ditemukan.")
             end
         end  
     })
