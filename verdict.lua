@@ -408,6 +408,117 @@ Main:CreateToggle({
     -- MISC TAB
     local MiscTab = Window:CreateTab("Misc", 4483362458)
     windows.Misc = MiscTab
+    
+    MiscTab:CreateSection("Gendong Player")
+    
+    local gendongPlayerName = nil
+    local function gplayerOptions()
+        return sortedPlayerNames() or {}
+    end
+    local GendongDropdown = MiscTab:CreateDropdown({
+        Name = "Pilih Pemain",
+        Options = gplayerOptions(),
+        CurrentOption = {},
+        MultipleOptions = false,
+        Flag = "GendongPlayerDropdown",
+        Callback = function(option)
+            gendongPlayerName = (typeof(option) == "table" and option[1]) or option
+        end,
+    })
+
+    setConn("playerAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() GendongDropdown:Refresh(gplayerOptions(), true) end)
+    end))
+    setConn("playerRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() GendongDropdown:Refresh(gplayerOptions(), true) end)
+    end))
+    local gendong = pcall(function()
+        return ReplicatedStorage:WaitForChild("CarryRequest")
+    end)
+    MiscTab:CreateButton({
+        Name = "Gendong Player",
+        Callback = function()
+            if not gendongPlayerName or gendongPlayerName == "" then
+                notify("Pilih pemain terlebih dahulu.")
+                return
+            end
+            local target = Players:FindFirstChild(gendongPlayerName)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                --local tPlayer = { gendongPlayerName }
+                local checkStatuss = true
+                if checkStatuss then
+                    --:WaitForChild("CarryRequest"):FireServer(gendongPlayerName)
+                    local SOME_2 = game:GetService("ReplicatedStorage"):WaitForChild("PerPlayerEvents"):WaitForChild(gendongPlayerName)
+                notify("Permintaan Gendong Telah Dikirim ke "..gendongPlayerName)
+                end
+            else
+                notify("Pemain tidak valid atau belum spawn.")
+            end
+        end
+    })
+
+    MiscTab:CreateButton({
+        Name = "Refresh List",
+        Callback = function()
+            GendongDropdown:Refresh(gplayerOptions(), true)
+            notify("Daftar pemain diperbarui.")
+        end
+    })
+    
+    --GB CKPTW
+    MiscTab:CreateSection("GB Gunung CKPTW")
+    MiscTab:CreateButton({
+       Name = "GB Summit CKPTW" ,
+       Callback = function()
+            local hrp = getHRP()
+            if hrp then
+                hrp.CFrame = CFrame.new(Vector3.new(1815, 1983, 2168) + Vector3.new(0,5,0))
+                notify("Teleport ke Summit")
+            end
+        end  
+    })
+    
+    MiscTab:CreateSection("GB Summit")
+    MiscTab:CreateButton({
+        Name = "GB Summit MT.DAUN",
+        Callback = function()
+            local hrp = getHRP()
+            if hrp then
+                hrp.CFrame = CFrame.new(Vector3.new(-620.8, 253.5, -385.0) + Vector3.new(0,5,0))
+                notify("Teleport ke Pos 1")
+                task.wait(2.0)
+                hrp.CFrame = CFrame.new(Vector3.new(-1205.0, 264.9, -486.8) + Vector3.new(0,5,0))
+                notify("Teleport ke Pos 2")
+                task.wait(2.0)
+                hrp.CFrame = CFrame.new(Vector3.new(-1399.4, 581.6, -949.3) + Vector3.new(0,5,0))
+                notify("Teleport ke Pos 3")
+                task.wait(2.0)
+                hrp.CFrame = CFrame.new(Vector3.new(-1699.9, 819.9, -1397.9) + Vector3.new(0,5,0))
+                notify("Teleport ke Pos 4")
+                task.wait(1.2)
+                --OTW SUMIT
+                hrp.CFrame = CFrame.new(Vector3.new(-1835.3, 744.2, -1483.8) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-1890.3, 775.5, -1582.0) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-1969.2, 841.8, -1666.8) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-2048.6, 887.7, -1751.1) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-2090.5, 913.3, -1755.9) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-3124.3, 1738.0, -2605.0) + Vector3.new(0,5,0))
+                task.wait(0.8)
+                hrp.CFrame = CFrame.new(Vector3.new(-3232.4, 1717.7, -2585.6) + Vector3.new(0,5,0))
+                task.wait(2.8)
+                ------------
+                hrp.CFrame = CFrame.new(Vector3.new(-3233.6, 1716.0, -2589.3 ) + Vector3.new(0,5,0))
+                notify("Teleport ke Summit")
+            else
+                notify("HumanoidRootPart tidak ditemukan.")
+            end
+        end
+    }) 
 
     MiscTab:CreateSection("Spectate Player")
     local spectateTargetName = nil
