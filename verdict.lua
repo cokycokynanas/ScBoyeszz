@@ -406,28 +406,138 @@ Main:CreateToggle({
     end })
 
     -- MISC TAB
-    local MiscTab = Window:CreateTab("Misc", 4483362458)
-    windows.Misc = MiscTab
+    local GbTab = Window:CreateTab("GB Gunung", 4483362458)
+    windows.GB = GbTab
     
+    flags.GBYahayuk = false
+    GbTab:CreateSection("GB Gunung Yahayuk V0.1")
+    GbTab:CreateToggle({
+        Name = "GB Summit Yahayuk V0.1",
+        Callback = function(enabled)
+            flags.GBYahayuk = enabled
+            if flags.GBYahayuk then
+                local hrp = getHRP()
+                while flags.GBYahayuk do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(-471,250,775) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(-362,389,573) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(257,431,507) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(332,491,357) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(238,315,-145 ) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(-613,906,-551 ) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                        notify("Summit for Yahayuk V0.1!!")
+                        task.wait(3.0)
+                    end
+                    --ResetCP:FireServer()
+                    task.wait(3.0)
+                end
+            else
+                notify("GB Yahayuk V0.1 OFF")
+            end
+        end
+    })
     
+    flags.GBHoreg = false
+    GbTab:CreateSection("GB Gunung Horeg")
+    GbTab:CreateToggle({
+        Name = "GB Summit Horeg",
+        Callback = function(enabled)
+            flags.GBHoreg = enabled
+            if flags.GBHoreg then
+                local hrp = getHRP()
+                while flags.GBHoreg do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(-1692,1147,567) + Vector3.new(0,5,0))
+                        notify("Summit for Horeg!!")
+                        task.wait(3.0)
+                    end
+                    ReplicatedStorage:WaitForChild("ResetToCheckpointEvent"):FireServer()
+                    task.wait(3.0)
+                end
+            else
+                notify("GB Horeg OFF")
+            end
+        end
+    })
     
+    flags.GBSibuatan = false
+    GbTab:CreateSection("GB Gunung Sibuatan")
+    GbTab:CreateToggle({
+        Name = "GB Summit Sibuatan" ,
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.GBSibuatan = enabled
+            if flags.GBSibuatan then
+                local hrp = getHRP()
+                while flags.GBSibuatan do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(5394,8110,2206) + Vector3.new(0,5,0))
+                    task.wait(1.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(982,114,-696) + Vector3.new(0,5,0))
+                    task.wait(1.0)
+                        hrp.CFrame = CFrame.new(Vector3.new(-312,156,-323) + Vector3.new(0,5,0))
+                        task.wait(3.0)
+                    end
+                
+                    local hum = getHumanoid()
+                    if hum then
+                        hum.Health = 0
+                    end
+                    task.wait(8.0)
+                    notify("Silahkan relog!!")
+                --hum.Health = 100;
+                --task.wait(3.0)
+                end
+            else
+                local hum = getHumanoid()
+                if hum then
+                    hum.Health =  hum.MaxHealth
+                end
+            end
+        end
+    })
+
     --GB CKPTW
-    MiscTab:CreateSection("GB Gunung CKPTW")
-    MiscTab:CreateButton({
-       Name = "GB Summit CKPTW",
+    GbTab:CreateSection("GB Gunung CKPTW")
+    GbTab:CreateButton({
+       Name = "GB Summit CKPTW" ,
        Callback = function()
             local hrp = getHRP()
             if hrp then
+                hrp.CFrame = CFrame.new(Vector3.new(386,311,-184) + Vector3.new(0,5,0))
+                task.wait(5.0)
+                hrp.CFrame = CFrame.new(Vector3.new(101,414,616) + Vector3.new(0,5,0))
+                task.wait(5.0)
+                hrp.CFrame = CFrame.new(Vector3.new(10,603,997) + Vector3.new(0,5,0))
+                task.wait(5.0)
+                hrp.CFrame = CFrame.new(Vector3.new(872,866,582) + Vector3.new(0,5,0))
+                task.wait(5.0)
+                hrp.CFrame = CFrame.new(Vector3.new(1617,1082,158) + Vector3.new(0,5,0))
+                task.wait(5.0)
+                hrp.CFrame = CFrame.new(Vector3.new(2969,1529,706) + Vector3.new(0,5,0))
+                notify("Tunggu 1 menit untuk summit")
+                task.wait(60.0)
                 hrp.CFrame = CFrame.new(Vector3.new(1815, 1983, 2168) + Vector3.new(0,5,0))
+                clearConn("godMode")
+                setConn("godMode", RunService.Heartbeat:Connect(function()
+                    local hum = getHumanoid()
+                    if hum and hum.Health < hum.MaxHealth then
+                        hum.Health = hum.MinHealth
+                    end
+                end))
                 notify("Teleport ke Summit")
-            else
-                notify("HumanoidRootPart tidak ditemukan.")
             end
         end  
     })
     
-    MiscTab:CreateSection("GB Summit")
-    MiscTab:CreateButton({
+    GbTab:CreateSection("GB Summit")
+    GbTab:CreateButton({
         Name = "GB Summit MT.DAUN",
         Callback = function()
             local hrp = getHRP()
@@ -468,6 +578,9 @@ Main:CreateToggle({
         end
     }) 
 
+    local MiscTab = Window:CreateTab("Misc", 4483362458)
+    windows.Misc = MiscTab
+    
     MiscTab:CreateSection("Spectate Player")
     local spectateTargetName = nil
     local viewDiedConn = nil
