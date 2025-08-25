@@ -22,4 +22,4 @@ Desainnya minimalis namun fungsional, sehingga mudah dipahami dan dimodifikasi.
 
 ## 📜 Example Usage
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/BangsNgek/SimpleBloxGUI/refs/heads/main/verdict.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/verdict.lua"))()
