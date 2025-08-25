@@ -71,7 +71,7 @@ local function notify(msg)
             Rayfield:Notify({ Title = "Info", Content = tostring(msg), Duration = 2, Image = 4483362458 })
         end)
     else
-        warn("[BangsNgek Tools] " .. tostring(msg))
+        warn("[BangBoyeszz Tools] " .. tostring(msg))
     end
 end
 
@@ -91,13 +91,13 @@ end
 local function CreateUI()
     -- Load Rayfield
     --Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/BangsNgek/SimpleBloxGUI/refs/heads/main/rf.lua"))()
+    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/rf.lua"))()
 
     -- Create Window
     local Window = Rayfield:CreateWindow({
-        Name = "BangsNgek Tools",
-        LoadingTitle = "BangsNgek Tools",
-        LoadingSubtitle = "Just a Simple Script ♡",
+        Name = "BangBoyeszz Tools",
+        LoadingTitle = "BangBoyeszz Tools",
+        LoadingSubtitle = "Just a Simple Script By Boyeszz♡",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
     })
