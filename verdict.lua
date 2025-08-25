@@ -68,10 +68,10 @@ local Rayfield = nil
 local function notify(msg)
     if Rayfield and Rayfield.Notify then
         pcall(function()
-            Rayfield:Notify({ Title = "Info", Content = tostring(msg), Duration = 3, Image = 4483362458 })
+            Rayfield:Notify({ Title = "Info", Content = tostring(msg), Duration = 2, Image = 4483362458 })
         end)
     else
-        warn("[SimpleBloxGUI] " .. tostring(msg))
+        warn("[BangsNgek Tools] " .. tostring(msg))
     end
 end
 
@@ -90,12 +90,13 @@ end
 -- UI & Feature init
 local function CreateUI()
     -- Load Rayfield
-    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    --Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/BangsNgek/SimpleBloxGUI/refs/heads/main/rf.lua"))()
 
     -- Create Window
     local Window = Rayfield:CreateWindow({
-        Name = "SimpleBloxGUI",
-        LoadingTitle = "SimpleBloxGUI",
+        Name = "BangsNgek Tools",
+        LoadingTitle = "BangsNgek Tools",
         LoadingSubtitle = "Just a Simple Script ♡",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
@@ -440,6 +441,118 @@ Main:CreateToggle({
             else
                 notify("GB Yahayuk V0.1 OFF")
             end
+        end
+    })
+
+    GbTab:CreateSection("GB Gunung Galatea")
+    GbTab:CreateButton({
+        Name = "GB Summit Galatea",
+        Callback = function()
+            --flags.GBHoreg = enabled
+            --if flags.GBHoreg then
+                local hrp = getHRP()
+                local hum = getHumanoid()
+                local cp2 = Vector3.new(513,6,818)
+                --local tolerance = 1
+                if hrp.Position == target then
+                    hrp.CFrame = CFrame.new(Vector3.new(-7,206,713) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(-433,298,593) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(-737,258,309) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(-701,286,-3) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(-422,325,-470) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(336,319,-560) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(929,362,-628) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(1174,273,-965) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(780,302,-1071) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(147,372,-1206) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hrp.CFrame = CFrame.new(Vector3.new(-978,689,-1155) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        notify("Summit for Galatea!!")
+                        if hum then
+                            hum.Health = 0
+                        end
+                else
+                --while flags.GBHoreg do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(676,283,4) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hum.Health = hum.MaxHealth
+                        hrp.CFrame = CFrame.new(Vector3.new(652,286,210) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hum.Health = hum.MaxHealth
+                        hrp.CFrame = CFrame.new(Vector3.new(720,205,462) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hum.Health = hum.MaxHealth
+                        hrp.CFrame = CFrame.new(Vector3.new(779,111,623) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hum.Health = hum.MaxHealth
+                        hrp.CFrame = CFrame.new(Vector3.new(645,57,772) + Vector3.new(0,5,0))
+                        task.wait(1.5)
+                        hum.Health = hum.MaxHealth
+                        hrp.CFrame = CFrame.new(Vector3.new(513,6,818) + Vector3.new(0,5,0))
+                        hum.Health = hum.MaxHealth
+                        task.wait(1.5)
+                        
+                        --task.wait(3.0)
+                    end
+                    --ReplicatedStorage:WaitForChild("ResetToCheckpointEvent"):FireServer()
+                    --task.wait(3.0)
+                end
+            --else
+               -- notify("GB Horeg OFF")
+            --
+        end
+    })
+    --flags.GBAtin = false
+    GbTab:CreateSection("GB Gunung Atin")
+    GbTab:CreateButton({
+        Name = "GB Summit Atin",
+        Callback = function()
+            --flags.GBHoreg = enabled
+            --if flags.GBHoreg then
+                local hrp = getHRP()
+                --while flags.GBHoreg do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(784,2164,3921) + Vector3.new(0,5,0))
+                        notify("Summit for Atin!!")
+                        --task.wait(3.0)
+                    end
+                    --ReplicatedStorage:WaitForChild("ResetToCheckpointEvent"):FireServer()
+                    --task.wait(3.0)
+               -- end
+            --else
+               -- notify("GB Horeg OFF")
+            --
+        end
+    })
+    GbTab:CreateButton({
+        Name = "BackToBase Atin",
+        Callback = function()
+            --flags.GBHoreg = enabled
+            --if flags.GBHoreg then
+                local hrp = getHRP()
+                --while flags.GBHoreg do
+                    if hrp then
+                        hrp.CFrame = CFrame.new(Vector3.new(16,56,-1082) + Vector3.new(0,5,0))
+                        notify("Summit for Horeg!!")
+                        --task.wait(3.0)
+                    end
+                    --ReplicatedStorage:WaitForChild("ResetToCheckpointEvent"):FireServer()
+                    --task.wait(3.0)
+               -- end
+            --else
+               -- notify("GB Horeg OFF")
+            --end
         end
     })
     
