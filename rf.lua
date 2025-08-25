@@ -11,7 +11,7 @@
 ]]
 
 if debugX then
-	warn('Initialising BangsNgek Tools')
+	warn('Initialising BangBoyeszz Tools')
 end
 
 local function getService(name)
