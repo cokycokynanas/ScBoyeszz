@@ -360,7 +360,7 @@ Main:CreateToggle({
 
     -- Save & Teleport Pos
     TeleportTab:CreateSection("Save & Teleport Pos")
-    local savedSlots = { nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil }
+    local savedSlots = { nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil }
     local slotSelected = 1
 
     local SlotDropdown = TeleportTab:CreateDropdown({
