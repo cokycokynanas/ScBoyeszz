@@ -1850,17 +1850,36 @@ function RayfieldLibrary:CreateWindow(Settings)
 			logoImg = Instance.new("ImageLabel")
 			logoImg.Name = "BoyeszLogo"
 			logoImg.BackgroundTransparency = 1
-			logoImg.Size = UDim2.new(0, 60, 0, 60)
+			logoImg.Size = UDim2.new(0, 64, 0, 64)
 			logoImg.AnchorPoint = Vector2.new(0.5, 0.5)
-			logoImg.Position = UDim2.new(0.5, 0, 0.25, 0)
+			logoImg.Position = UDim2.new(0.5, 0, 0.28, 0)
 			logoImg.ImageTransparency = 1
-			
+			logoImg.ZIndex = 20
+
+			local logoImageUri = "rbxassetid://7733658504"
 			local customAsset = (getcustomasset or getsynasset)
-			if customAsset and isfile and isfile("boyesz_tonz_logo.jpg") then
-				pcall(function() logoImg.Image = customAsset("boyesz_tonz_logo.jpg") end)
-			else
-				logoImg.Image = "rbxassetid://10723394142"
+
+			if writefile and isfile and customAsset then
+				if not isfile("boyesz_tonz_logo.jpg") then
+					pcall(function()
+						local data = game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/boyesz_tonz_logo.jpg")
+						if data and #data > 100 then
+							writefile("boyesz_tonz_logo.jpg", data)
+						end
+					end)
+				end
+				if isfile("boyesz_tonz_logo.jpg") then
+					pcall(function()
+						logoImageUri = customAsset("boyesz_tonz_logo.jpg")
+					end)
+				end
+			elseif customAsset and isfile and isfile("boyesz_tonz_logo.jpg") then
+				pcall(function()
+					logoImageUri = customAsset("boyesz_tonz_logo.jpg")
+				end)
 			end
+
+			logoImg.Image = logoImageUri
 			logoImg.Parent = LoadingFrame
 		end
 		TweenService:Create(logoImg, TweenInfo.new(0.7, Enum.EasingStyle.Exponential), {ImageTransparency = 0}):Play()

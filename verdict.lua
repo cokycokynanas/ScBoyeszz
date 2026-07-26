@@ -1054,122 +1054,227 @@ local function CreateUI()
         windows.ESP = ESPTab
         
         flags.playerESP = false
-        local espTable = {} -- { TargetPlayer = { BillboardGui, LinePart }, ... }
+        flags.highlightESP = false
+        local espTable = {} -- { TargetPlayer = { Billboard, Highlight }, ... }
         
-        -- Helper untuk membuat BillboardGui
+        -- Helper untuk membuat BillboardGui modern (Card + Health Bar + Name/Distance)
         local function createBillboard(targetCharacter)
+            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+            if not hrp then return nil end
+
             local billboard = Instance.new("BillboardGui")
             billboard.Name = "PlayerESP_BB"
-            billboard.Adornee = targetCharacter:FindFirstChild("HumanoidRootPart") or targetCharacter:WaitForChild("HumanoidRootPart", 5)
-            billboard.Size = UDim2.new(0, 150, 0, 50)
+            billboard.Adornee = hrp
+            billboard.Size = UDim2.new(0, 160, 0, 45)
             billboard.AlwaysOnTop = true
-            billboard.ExtentsOffset = Vector3.new(0, 5, 0)
+            billboard.ExtentsOffset = Vector3.new(0, 3.5, 0)
             
+            local card = Instance.new("Frame")
+            card.Name = "Card"
+            card.Size = UDim2.new(1, 0, 1, 0)
+            card.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+            card.BackgroundTransparency = 0.25
+            card.BorderSizePixel = 0
+            card.Parent = billboard
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 6)
+            corner.Parent = card
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Name = "Stroke"
+            stroke.Color = Color3.fromRGB(0, 170, 255)
+            stroke.Thickness = 1.5
+            stroke.Transparency = 0.3
+            stroke.Parent = card
+
             local text = Instance.new("TextLabel")
             text.Name = "InfoText"
-            text.Size = UDim2.new(1, 0, 1, 0)
+            text.Size = UDim2.new(1, -10, 0, 20)
+            text.Position = UDim2.new(0, 5, 0, 3)
             text.Text = targetCharacter.Name
-            text.TextColor3 = Color3.new(1, 1, 1)
-            text.TextStrokeColor3 = Color3.new(0, 0, 0)
-            text.TextStrokeTransparency = 0
+            text.TextColor3 = Color3.fromRGB(255, 255, 255)
+            text.TextStrokeTransparency = 0.6
             text.BackgroundTransparency = 1
-            text.Font = Enum.Font.SourceSansBold
-            text.TextSize = 14
-            text.Parent = billboard
+            text.Font = Enum.Font.GothamBold
+            text.TextSize = 12
+            text.Parent = card
+
+            local healthBg = Instance.new("Frame")
+            healthBg.Name = "HealthBg"
+            healthBg.Size = UDim2.new(1, -16, 0, 6)
+            healthBg.Position = UDim2.new(0, 8, 1, -11)
+            healthBg.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+            healthBg.BorderSizePixel = 0
+            healthBg.Parent = card
+
+            local healthCorner = Instance.new("UICorner")
+            healthCorner.CornerRadius = UDim.new(0, 3)
+            healthCorner.Parent = healthBg
+
+            local healthFill = Instance.new("Frame")
+            healthFill.Name = "HealthFill"
+            healthFill.Size = UDim2.new(1, 0, 1, 0)
+            healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+            healthFill.BorderSizePixel = 0
+            healthFill.Parent = healthBg
+
+            local fillCorner = Instance.new("UICorner")
+            fillCorner.CornerRadius = UDim.new(0, 3)
+            fillCorner.Parent = healthFill
             
-            billboard.Parent = LocalPlayer.PlayerGui
+            billboard.Parent = LocalPlayer:WaitForChild("PlayerGui")
             return billboard
+        end
+
+        -- Helper untuk membuat Highlight ESP (Chams Glow through walls)
+        local function createHighlight(targetCharacter)
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "PlayerESP_Highlight"
+            highlight.Adornee = targetCharacter
+            highlight.FillColor = Color3.fromRGB(255, 50, 50)
+            highlight.FillTransparency = 0.55
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.OutlineTransparency = 0.1
+            highlight.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            return highlight
         end
         
         -- Helper untuk menghapus visual ESP
         local function cleanupESP(player)
             if espTable[player] then
                 if espTable[player].Billboard then
-                    espTable[player].Billboard:Destroy()
+                    pcall(function() espTable[player].Billboard:Destroy() end)
                 end
-                -- LinePart cleanup can be ignored for simple BB implementation
+                if espTable[player].Highlight then
+                    pcall(function() espTable[player].Highlight:Destroy() end)
+                end
                 espTable[player] = nil
             end
         end
         
-        -- Main ESP Loop (RunService.Heartbeat for position update)
+        -- Main ESP Loop
         local function updateESP()
+            if not flags.playerESP and not flags.highlightESP then return end
+
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer then
                     local char = player.Character
-                    
-                    if char and char:FindFirstChild("HumanoidRootPart") and flags.playerESP then
-                        if not espTable[player] or not espTable[player].Billboard or not espTable[player].Billboard.Parent then
-                            -- Create Visuals
-                            espTable[player] = espTable[player] or {}
-                            espTable[player].Billboard = createBillboard(char)
-                            
-                            -- Re-connect Adornee if character changes
-                            setConn("ESP_"..player.Name, player.CharacterAdded:Connect(function(newChar)
-                                -- Wait for HRP in the new character
-                                local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-                                if hrp and espTable[player] and espTable[player].Billboard then
-                                    espTable[player].Billboard.Adornee = hrp
-                                end
-                            end))
-                        end
-                        
-                        -- Update Info
-                        local hrp = char:FindFirstChild("HumanoidRootPart")
-                        if hrp and espTable[player] and espTable[player].Billboard then
-                            local textLabel = espTable[player].Billboard:FindFirstChild("InfoText")
-                            if textLabel then
-                                local myHRP = getHRP()
-                                if myHRP then
-                                    local distance = (myHRP.Position - hrp.Position).Magnitude
-                                    textLabel.Text = string.format("%s\n(%.1fm)", player.Name, distance)
-                                    
-                                    -- Optional: Change color based on team/status
-                                    if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                                        textLabel.TextColor3 = Color3.new(0, 1, 0) -- Green for teammate
-                                    else
-                                        textLabel.TextColor3 = Color3.new(1, 0, 0) -- Red for enemy
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    local isAlive = hrp and hum and hum.Health > 0
+
+                    if isAlive then
+                        espTable[player] = espTable[player] or {}
+                        local isTeammate = (player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team)
+
+                        -- 1. Name Tag + Health Bar ESP
+                        if flags.playerESP then
+                            if not espTable[player].Billboard or not espTable[player].Billboard.Parent then
+                                espTable[player].Billboard = createBillboard(char)
+                            end
+
+                            local bb = espTable[player].Billboard
+                            if bb then
+                                bb.Adornee = hrp
+                                local card = bb:FindFirstChild("Card")
+                                if card then
+                                    local textLabel = card:FindFirstChild("InfoText")
+                                    local healthBg = card:FindFirstChild("HealthBg")
+                                    local healthFill = healthBg and healthBg:FindFirstChild("HealthFill")
+                                    local stroke = card:FindFirstChild("Stroke")
+
+                                    local myHRP = getHRP()
+                                    local dist = myHRP and math.floor((myHRP.Position - hrp.Position).Magnitude) or 0
+                                    local healthPct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+
+                                    if textLabel then
+                                        textLabel.Text = string.format("%s | %d HP (%dm)", player.Name, math.floor(hum.Health), dist)
+                                    end
+
+                                    if healthFill then
+                                        healthFill.Size = UDim2.new(healthPct, 0, 1, 0)
+                                        if healthPct > 0.6 then
+                                            healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 130)
+                                        elseif healthPct > 0.3 then
+                                            healthFill.BackgroundColor3 = Color3.fromRGB(255, 190, 0)
+                                        else
+                                            healthFill.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+                                        end
+                                    end
+
+                                    if stroke then
+                                        stroke.Color = isTeammate and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(255, 60, 60)
                                     end
                                 end
                             end
+                        else
+                            if espTable[player].Billboard then
+                                espTable[player].Billboard:Destroy()
+                                espTable[player].Billboard = nil
+                            end
+                        end
+
+                        -- 2. Highlight Chams ESP (Glow through walls)
+                        if flags.highlightESP then
+                            if not espTable[player].Highlight or not espTable[player].Highlight.Parent then
+                                espTable[player].Highlight = createHighlight(char)
+                            end
+
+                            local hl = espTable[player].Highlight
+                            if hl then
+                                hl.Adornee = char
+                                hl.FillColor = isTeammate and Color3.fromRGB(0, 200, 255) or Color3.fromRGB(255, 50, 50)
+                            end
+                        else
+                            if espTable[player].Highlight then
+                                espTable[player].Highlight:Destroy()
+                                espTable[player].Highlight = nil
+                            end
                         end
                     else
-                        -- Player is nil/dead or ESP is off, clean up
                         cleanupESP(player)
                     end
                 end
             end
         end
+
+        local function toggleESPState()
+            clearConn("playerESP_Loop")
+            if flags.playerESP or flags.highlightESP then
+                setConn("playerESP_Rem", Players.PlayerRemoving:Connect(cleanupESP))
+                setConn("playerESP_Loop", RunService.Heartbeat:Connect(updateESP))
+            else
+                clearConn("playerESP_Rem")
+                for player, _ in pairs(espTable) do
+                    cleanupESP(player)
+                end
+                espTable = {}
+            end
+        end
         
         ESPTab:CreateToggle({
-            Name = "Player ESP",
+            Name = "Name & Health Bar ESP",
             CurrentValue = false,
             Callback = function(enabled)
                 flags.playerESP = enabled
-                
-                clearConn("playerESP_Loop")
-                if enabled then
-                    -- Add cleanup for players leaving
-                    setConn("playerESP_Rem", Players.PlayerRemoving:Connect(cleanupESP))
-                    
-                    -- Start main update loop
-                    setConn("playerESP_Loop", RunService.Heartbeat:Connect(updateESP))
-                else
-                    -- Disable, clean up all existing visuals
-                    clearConn("playerESP_Rem")
-                    for player, data in pairs(espTable) do
-                        cleanupESP(player)
-                    end
-                    espTable = {} -- Reset table
-                end
+                toggleESPState()
+            end
+        })
+
+        ESPTab:CreateToggle({
+            Name = "Chams Glow ESP (Through Walls)",
+            CurrentValue = false,
+            Callback = function(enabled)
+                flags.highlightESP = enabled
+                toggleESPState()
             end
         })
         
-        -- Optional: Add a button to refresh if something goes wrong
         ESPTab:CreateButton({
             Name = "Refresh ESP",
             Callback = function()
-                for player, data in pairs(espTable) do
+                for player, _ in pairs(espTable) do
                     cleanupESP(player)
                 end
                 espTable = {}
