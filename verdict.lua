@@ -834,29 +834,34 @@ local function CreateUI()
         for i=1,30 do savedSlots[i] = nil end
     end })
 
-    -- FLOATING TELEPORT WIDGET (Teleport 1 Quick Floating TP)
-    TeleportTab:CreateSection("Quick Floating Teleport")
+    -- FLOATING TELEPORT WIDGET SYSTEM (Slots 1 to 10)
+    TeleportTab:CreateSection("Quick Floating Teleports (Slots 1 - 10)")
 
-    local floatingTPGui = nil
-    local quickSavedCFrame = nil
+    local floatingTPWidgets = {} -- { [slotId] = ScreenGui }
+    local quickSavedCFrames = {} -- { [slotId] = CFrame }
+    local selectedWidgetSlot = 1
 
-    local function createFloatingTPWidget()
-        if floatingTPGui then
-            floatingTPGui:Destroy()
-            floatingTPGui = nil
+    local function createFloatingTPWidget(slotId)
+        slotId = tonumber(slotId) or 1
+        if floatingTPWidgets[slotId] then
+            floatingTPWidgets[slotId]:Destroy()
+            floatingTPWidgets[slotId] = nil
         end
 
         local gui = Instance.new("ScreenGui")
-        gui.Name = "BoyeszQuickTP_Gui"
+        gui.Name = "BoyeszQuickTP_Gui_Slot" .. slotId
         gui.ResetOnSpawn = false
 
         local parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
         gui.Parent = parent
 
+        local offsetX = ((slotId - 1) % 3) * 65 - 65
+        local offsetY = math.floor((slotId - 1) / 3) * 55
+
         local frame = Instance.new("Frame")
         frame.Name = "MainFrame"
         frame.Size = UDim2.new(0, 180, 0, 48)
-        frame.Position = UDim2.new(0.5, -90, 0.8, 0)
+        frame.Position = UDim2.new(0.5, -90 + offsetX, 0.75 - (offsetY / 1000), 0)
         frame.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
         frame.BackgroundTransparency = 0.2
         frame.BorderSizePixel = 0
@@ -878,7 +883,7 @@ local function CreateUI()
         title.Name = "Title"
         title.Size = UDim2.new(1, -20, 0, 14)
         title.Position = UDim2.new(0, 8, 0, 3)
-        title.Text = "⚡ Quick TP 1"
+        title.Text = string.format("⚡ Quick TP Slot %d", slotId)
         title.TextColor3 = Color3.fromRGB(0, 200, 255)
         title.TextTransparency = 0.2
         title.BackgroundTransparency = 1
@@ -899,9 +904,10 @@ local function CreateUI()
         closeBtn.Parent = frame
 
         closeBtn.MouseButton1Click:Connect(function()
-            flags.quickTPWidget = false
-            gui:Destroy()
-            floatingTPGui = nil
+            if floatingTPWidgets[slotId] then
+                floatingTPWidgets[slotId]:Destroy()
+                floatingTPWidgets[slotId] = nil
+            end
         end)
 
         local saveBtn = Instance.new("TextButton")
@@ -909,10 +915,10 @@ local function CreateUI()
         saveBtn.Size = UDim2.new(0.46, 0, 0, 24)
         saveBtn.Position = UDim2.new(0, 6, 1, -27)
         saveBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-        saveBtn.Text = "💾 Save"
+        saveBtn.Text = "💾 Save " .. slotId
         saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         saveBtn.Font = Enum.Font.GothamBold
-        saveBtn.TextSize = 11
+        saveBtn.TextSize = 10
         saveBtn.Parent = frame
 
         local saveCorner = Instance.new("UICorner")
@@ -922,10 +928,10 @@ local function CreateUI()
         saveBtn.MouseButton1Click:Connect(function()
             local hrp = getHRP()
             if hrp then
-                quickSavedCFrame = hrp.CFrame
+                quickSavedCFrames[slotId] = hrp.CFrame
                 saveBtn.Text = "✓ Saved!"
                 task.wait(0.8)
-                saveBtn.Text = "💾 Save"
+                saveBtn.Text = "💾 Save " .. slotId
             end
         end)
 
@@ -934,10 +940,10 @@ local function CreateUI()
         tpBtn.Size = UDim2.new(0.46, 0, 0, 24)
         tpBtn.Position = UDim2.new(0.51, 0, 1, -27)
         tpBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-        tpBtn.Text = "⚡ TP"
+        tpBtn.Text = "⚡ TP " .. slotId
         tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         tpBtn.Font = Enum.Font.GothamBold
-        tpBtn.TextSize = 11
+        tpBtn.TextSize = 10
         tpBtn.Parent = frame
 
         local tpCorner = Instance.new("UICorner")
@@ -945,32 +951,57 @@ local function CreateUI()
         tpCorner.Parent = tpBtn
 
         tpBtn.MouseButton1Click:Connect(function()
-            if quickSavedCFrame then
+            if quickSavedCFrames[slotId] then
                 local hrp = getHRP()
                 if hrp then
-                    hrp.CFrame = quickSavedCFrame + Vector3.new(0, 2, 0)
+                    hrp.CFrame = quickSavedCFrames[slotId] + Vector3.new(0, 2, 0)
                 end
             else
                 tpBtn.Text = "No Pos!"
                 task.wait(0.8)
-                tpBtn.Text = "⚡ TP"
+                tpBtn.Text = "⚡ TP " .. slotId
             end
         end)
 
-        floatingTPGui = gui
+        floatingTPWidgets[slotId] = gui
     end
 
-    TeleportTab:CreateToggle({
-        Name = "Floating TP 1 Widget (Mengambang)",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.quickTPWidget = enabled
-            if enabled then
-                createFloatingTPWidget()
-            else
-                if floatingTPGui then
-                    floatingTPGui:Destroy()
-                    floatingTPGui = nil
+    local WidgetSlotDropdown = TeleportTab:CreateDropdown({
+        Name = "Pilih Slot Widget (1 - 10)",
+        Options = {"Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10"},
+        CurrentOption = {"Slot 1"},
+        MultipleOptions = false,
+        Flag = "WidgetSlotDropdown",
+        Callback = function(opt)
+            local chosen = (typeof(opt) == "table" and opt[1]) or opt
+            local num = tonumber(string.match(tostring(chosen), "%d+")) or 1
+            selectedWidgetSlot = num
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "Buka Widget (Slot Terpilih)",
+        Callback = function()
+            createFloatingTPWidget(selectedWidgetSlot)
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "Buka Semua Widget (1 - 10)",
+        Callback = function()
+            for i = 1, 10 do
+                createFloatingTPWidget(i)
+            end
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "Tutup Semua Floating Widget",
+        Callback = function()
+            for i = 1, 10 do
+                if floatingTPWidgets[i] then
+                    floatingTPWidgets[i]:Destroy()
+                    floatingTPWidgets[i] = nil
                 end
             end
         end

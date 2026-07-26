@@ -1521,11 +1521,11 @@ function RayfieldLibrary:CreateWindow(Settings)
 	end
 
 	LoadingFrame.Version.TextTransparency = 1
-	LoadingFrame.Title.Text = Settings.LoadingTitle or "BangBoyeszz Tools"
+	LoadingFrame.Title.Text = Settings.LoadingTitle or "Boyesz Tonz Tools"
 	LoadingFrame.Subtitle.Text = Settings.LoadingSubtitle or "Interface Suite"
 
-	if Settings.LoadingTitle ~= "BangBoyeszz Tools Interface Suite" then
-		LoadingFrame.Version.Text = "BangBoyeszz Tools UI"
+	if Settings.LoadingTitle ~= "Boyesz Tonz Tools Interface Suite" then
+		LoadingFrame.Version.Text = "Boyesz Tonz Tools UI"
 	end
 
 	if Settings.Icon and Settings.Icon ~= 0 and Topbar:FindFirstChild('Icon') then
