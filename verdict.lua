@@ -901,6 +901,94 @@ local function CreateUI()
         end
     })
 
+    -- FPS BOOST & PERFORMANCE SECTION
+    MiscTab:CreateSection("FPS Boost & Anti-Lag")
+
+    MiscTab:CreateButton({
+        Name = "Unlock FPS (Set 240 FPS)",
+        Callback = function()
+            if setfpscap then
+                pcall(function() setfpscap(240) end)
+            end
+        end
+    })
+
+    local originalGlobalShadows = Lighting.GlobalShadows
+    MiscTab:CreateToggle({
+        Name = "FPS Boost (Standard Anti-Lag)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.fpsBoost = enabled
+            if enabled then
+                pcall(function()
+                    Lighting.GlobalShadows = false
+                    Lighting.FogEnd = 9e9
+                    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+                    for _, effect in ipairs(Lighting:GetChildren()) do
+                        if effect:IsA("PostEffect") or effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
+                            effect.Enabled = false
+                        end
+                    end
+                    local terrain = Workspace:FindFirstChildOfClass("Terrain")
+                    if terrain then
+                        terrain.WaterWaveSize = 0
+                        terrain.WaterWaveSpeed = 0
+                        terrain.WaterReflectance = 0
+                        terrain.WaterTransparency = 0
+                        pcall(function() terrain.Decoration = false end)
+                    end
+                end)
+            else
+                pcall(function()
+                    Lighting.GlobalShadows = originalGlobalShadows
+                    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic end)
+                    for _, effect in ipairs(Lighting:GetChildren()) do
+                        if effect:IsA("PostEffect") or effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
+                            effect.Enabled = true
+                        end
+                    end
+                end)
+            end
+        end
+    })
+
+    MiscTab:CreateButton({
+        Name = "Ultra FPS Boost (Remove Textures & Effects)",
+        Callback = function()
+            pcall(function()
+                Lighting.GlobalShadows = false
+                Lighting.FogEnd = 9e9
+                pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+                
+                for _, effect in ipairs(Lighting:GetChildren()) do
+                    if effect:IsA("PostEffect") or effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
+                        effect.Enabled = false
+                    end
+                end
+
+                for _, v in ipairs(Workspace:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.Material = Enum.Material.SmoothPlastic
+                        v.Reflectance = 0
+                    elseif v:IsA("Decal") or v:IsA("Texture") then
+                        v:Destroy()
+                    elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                        v.Enabled = false
+                    end
+                end
+
+                local terrain = Workspace:FindFirstChildOfClass("Terrain")
+                if terrain then
+                    terrain.WaterWaveSize = 0
+                    terrain.WaterWaveSpeed = 0
+                    terrain.WaterReflectance = 0
+                    terrain.WaterTransparency = 0
+                    pcall(function() terrain.Decoration = false end)
+                end
+            end)
+        end
+    })
+
     -- GAME SCRIPTS TAB
     local GameTab = Window:CreateTab("Game Scripts", "gamepad-2")
     windows.GameScripts = GameTab
