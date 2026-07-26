@@ -352,12 +352,14 @@ local function CreateUI()
 
     -- Create Window
     local Window = Rayfield:CreateWindow({
-        Name = "BangBoyeszz Tools",
-        LoadingTitle = "BangBoyeszz Tools",
-        LoadingSubtitle = "v2 · By Boyeszz♡",
+        Name = "Boyesz Tonz Tools",
+        LoadingTitle = "⚡ Boyesz Tonz Tools ⚡",
+        LoadingSubtitle = "v2 · By Boyeszz Tonz ♡",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
         Theme = "DarkBlue",
+        DisableBuildWarnings = true,
+        DisableRayfieldPrompts = true,
     })
     windows.Window = Window
 
@@ -496,6 +498,39 @@ local function CreateUI()
                 if hum then hum.PlatformStand = false end
                 if head then head.Anchored = false end
             end
+        end
+    })
+
+    -- Fly Script (External Pastebin)
+    MovementTab:CreateToggle({
+        Name = "Fly Script (Auto-Execute)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.externalFly = enabled
+            if enabled then
+                task.spawn(function()
+                    local ok, err = pcall(function()
+                        loadstring(game:HttpGet("https://pastebin.com/raw/seGbe6tn"))()
+                    end)
+                    if not ok then
+                        warn("[Boyesz Tonz] Error executing Fly Script:", err)
+                    end
+                end)
+            end
+        end
+    })
+
+    MovementTab:CreateButton({
+        Name = "Execute Fly Script",
+        Callback = function()
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    loadstring(game:HttpGet("https://pastebin.com/raw/seGbe6tn"))()
+                end)
+                if not ok then
+                    warn("[Boyesz Tonz] Error executing Fly Script:", err)
+                end
+            end)
         end
     })
 
@@ -863,6 +898,44 @@ local function CreateUI()
                     Workspace.CurrentCamera.CameraSubject = char
                 end
             end
+        end
+    })
+
+    -- GAME SCRIPTS TAB
+    local GameTab = Window:CreateTab("Game Scripts", "gamepad-2")
+    windows.GameScripts = GameTab
+
+    GameTab:CreateSection("Mine a Mountain")
+
+    GameTab:CreateToggle({
+        Name = "Mine a Mountain (Auto-Execute)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.mineAMountain = enabled
+            if enabled then
+                task.spawn(function()
+                    local ok, err = pcall(function()
+                        loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MineaMountain"))()
+                    end)
+                    if not ok then
+                        warn("[Boyesz Tonz] Error executing Mine a Mountain:", err)
+                    end
+                end)
+            end
+        end
+    })
+
+    GameTab:CreateButton({
+        Name = "Execute Mine a Mountain",
+        Callback = function()
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MineaMountain"))()
+                end)
+                if not ok then
+                    warn("[Boyesz Tonz] Error executing Mine a Mountain:", err)
+                end
+            end)
         end
     })
 
