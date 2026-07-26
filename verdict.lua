@@ -1,3 +1,7 @@
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
 -- Services & cached refs
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -56,7 +60,7 @@ end
 
 -- Character/Humanoid helpers
 local function getCharacter()
-    return LocalPlayer and (LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait())
+    return LocalPlayer and LocalPlayer.Character
 end
 
 local function getHumanoid(timeout)
@@ -71,7 +75,7 @@ end
 
 local function getHRP()
     local char = getCharacter()
-    return char and (char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 5))
+    return char and char:FindFirstChild("HumanoidRootPart")
 end
 
 -- Rayfield reference (set after UI init)
@@ -332,8 +336,19 @@ end
 -- UI & Feature init
 local function CreateUI()
     -- Load Rayfield
-    --Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/rf.lua"))()
+    local success, rf = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/rf.lua"))()
+    end)
+    if not success or not rf then
+        success, rf = pcall(function()
+            return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+        end)
+    end
+    if not success or not rf then
+        warn("[BangBoyeszz] Failed to load Rayfield UI library")
+        return
+    end
+    Rayfield = rf
 
     -- Create Window
     local Window = Rayfield:CreateWindow({
@@ -848,8 +863,6 @@ local function CreateUI()
                     Workspace.CurrentCamera.CameraSubject = char
                 end
             end
-        end
-    })
         end
     })
 
