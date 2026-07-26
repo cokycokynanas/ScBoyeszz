@@ -1850,9 +1850,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 			logoImg = Instance.new("ImageLabel")
 			logoImg.Name = "BoyeszLogo"
 			logoImg.BackgroundTransparency = 1
-			logoImg.Size = UDim2.new(0, 64, 0, 64)
+			logoImg.Size = UDim2.new(0, 50, 0, 50)
 			logoImg.AnchorPoint = Vector2.new(0.5, 0.5)
-			logoImg.Position = UDim2.new(0.5, 0, 0.28, 0)
+			logoImg.Position = UDim2.new(0.5, 0, 0.22, 0)
 			logoImg.ImageTransparency = 1
 			logoImg.ZIndex = 20
 
@@ -1882,6 +1882,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			logoImg.Image = logoImageUri
 			logoImg.Parent = LoadingFrame
 		end
+		logoImg.Visible = true
 		TweenService:Create(logoImg, TweenInfo.new(0.7, Enum.EasingStyle.Exponential), {ImageTransparency = 0}):Play()
 	end
 	TweenService:Create(LoadingFrame.Title, TweenInfo.new(0.7, Enum.EasingStyle.Exponential), {TextTransparency = 0}):Play()
@@ -3424,10 +3425,16 @@ function RayfieldLibrary:CreateWindow(Settings)
 	task.wait(1.1)
 	TweenService:Create(Main, TweenInfo.new(0.7, Enum.EasingStyle.Exponential, Enum.EasingDirection.InOut), {Size = UDim2.new(0, 390, 0, 90)}):Play()
 	task.wait(0.3)
+	local logoImg = LoadingFrame:FindFirstChild("BoyeszLogo")
+	if logoImg then
+		TweenService:Create(logoImg, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {ImageTransparency = 1}):Play()
+	end
 	TweenService:Create(LoadingFrame.Title, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {TextTransparency = 1}):Play()
 	TweenService:Create(LoadingFrame.Subtitle, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {TextTransparency = 1}):Play()
 	TweenService:Create(LoadingFrame.Version, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {TextTransparency = 1}):Play()
-	task.wait(0.1)
+	task.wait(0.2)
+	LoadingFrame.Visible = false
+	if logoImg then logoImg.Visible = false end
 	TweenService:Create(Main, TweenInfo.new(0.6, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {Size = useMobileSizing and UDim2.new(0, 500, 0, 275) or UDim2.new(0, 500, 0, 475)}):Play()
 	TweenService:Create(Main.Shadow.Image, TweenInfo.new(0.5, Enum.EasingStyle.Exponential), {ImageTransparency = 0.6}):Play()
 
