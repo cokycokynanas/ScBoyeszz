@@ -9,6 +9,8 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 -- General state
@@ -739,6 +741,102 @@ local function CreateUI()
     -- TELEPORT TAB
     local TeleportTab = Window:CreateTab("Teleport", "map-pin")
     windows.Teleport = TeleportTab
+
+    -- SERVER HOP & REJOIN SECTION
+    TeleportTab:CreateSection("Server Hop & Rejoin")
+
+    TeleportTab:CreateButton({
+        Name = "Server Hop (Pengguna Sedikit / Low Players)",
+        Callback = function()
+            task.spawn(function()
+                local placeId = game.PlaceId
+                local req = (syn and syn.request) or (http and http.request) or http_request or request
+                local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
+                
+                local servers = {}
+                pcall(function()
+                    if req then
+                        local res = req({Url = url, Method = "GET"})
+                        if res and res.Body then
+                            local data = HttpService:JSONDecode(res.Body)
+                            if data and data.data then servers = data.data end
+                        end
+                    else
+                        local resData = game:HttpGet(url)
+                        local data = HttpService:JSONDecode(resData)
+                        if data and data.data then servers = data.data end
+                    end
+                end)
+
+                for _, server in ipairs(servers) do
+                    if server.id ~= game.JobId and server.playing < server.maxPlayers and server.playing > 0 then
+                        TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                        break
+                    end
+                end
+            end)
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "Server Hop (Pengguna Ramai / High Players)",
+        Callback = function()
+            task.spawn(function()
+                local placeId = game.PlaceId
+                local req = (syn and syn.request) or (http and http.request) or http_request or request
+                local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", placeId)
+                
+                local servers = {}
+                pcall(function()
+                    if req then
+                        local res = req({Url = url, Method = "GET"})
+                        if res and res.Body then
+                            local data = HttpService:JSONDecode(res.Body)
+                            if data and data.data then servers = data.data end
+                        end
+                    else
+                        local resData = game:HttpGet(url)
+                        local data = HttpService:JSONDecode(resData)
+                        if data and data.data then servers = data.data end
+                    end
+                end)
+
+                for _, server in ipairs(servers) do
+                    if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                        TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                        break
+                    end
+                end
+            end)
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "Rejoin Current Server",
+        Callback = function()
+            pcall(function()
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+            end)
+        end
+    })
+
+    TeleportTab:CreateToggle({
+        Name = "Anti-AFK Protection (Auto 20m Kick Guard)",
+        CurrentValue = true,
+        Callback = function(enabled)
+            flags.antiAFK = enabled
+            clearConn("antiAFKConn")
+            if enabled then
+                local vu = game:GetService("VirtualUser")
+                setConn("antiAFKConn", LocalPlayer.Idled:Connect(function()
+                    if flags.antiAFK then
+                        vu:CaptureController()
+                        vu:ClickButton2(Vector2.new(0,0))
+                    end
+                end))
+            end
+        end
+    })
 
     TeleportTab:CreateSection("Pilih pemain untuk teleport")
     local selectedPlayerName = nil
