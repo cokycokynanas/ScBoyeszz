@@ -11,6 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local GuiService = game:GetService("GuiService")
+local Stats = game:GetService("Stats")
 local LocalPlayer = Players.LocalPlayer
 
 -- General state
@@ -334,6 +336,183 @@ local function doKillAura()
     end
 end
 
+-- Anti-Fling Function
+local function setAntiFling(enabled)
+    flags.antiFling = enabled
+    clearConn("antiFlingStepped")
+    if enabled then
+        setConn("antiFlingStepped", RunService.Stepped:Connect(function()
+            if not flags.antiFling then return end
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    for _, part in ipairs(player.Character:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            pcall(function()
+                                part.CanCollide = false
+                                part.Velocity = Vector3.zero
+                                part.RotVelocity = Vector3.zero
+                            end)
+                        end
+                    end
+                end
+            end
+        end))
+    end
+end
+
+-- Anti-Stun & Anti-Ragdoll Function
+local function setAntiStun(enabled)
+    flags.antiStun = enabled
+    clearConn("antiStunHeartbeat")
+    if enabled then
+        setConn("antiStunHeartbeat", RunService.Heartbeat:Connect(function()
+            if not flags.antiStun then return end
+            local hum = getHumanoid()
+            if hum then
+                if hum.PlatformStand then hum.PlatformStand = false end
+                if hum.Sit then hum.Sit = false end
+                local state = hum:GetState()
+                if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end))
+    end
+end
+
+-- FPS & Ping HUD Overlay Function
+local fpsPingGui = nil
+local function setFpsPingHUD(enabled)
+    flags.fpsPingHUD = enabled
+    if enabled then
+        if fpsPingGui then pcall(function() fpsPingGui:Destroy() end) end
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "BoyeszFpsPingHUD"
+        gui.ResetOnSpawn = false
+        gui.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(0, 160, 0, 32)
+        frame.Position = UDim2.new(1, -170, 0, 12)
+        frame.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+        frame.BackgroundTransparency = 0.25
+        frame.BorderSizePixel = 0
+        frame.Active = true
+        frame.Draggable = true
+        frame.Parent = gui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = frame
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(0, 170, 255)
+        stroke.Thickness = 1.2
+        stroke.Transparency = 0.3
+        stroke.Parent = frame
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 11
+        label.Text = "⚡ FPS: -- | Ping: --ms"
+        label.Parent = frame
+
+        fpsPingGui = gui
+
+        task.spawn(function()
+            local lastUpdate = tick()
+            local frameCount = 0
+            local fps = 60
+            while flags.fpsPingHUD and fpsPingGui and fpsPingGui.Parent do
+                frameCount = frameCount + 1
+                local now = tick()
+                if now - lastUpdate >= 0.5 then
+                    fps = math.floor(frameCount / (now - lastUpdate))
+                    frameCount = 0
+                    lastUpdate = now
+                    local ping = 0
+                    pcall(function()
+                        if Stats and Stats.Network and Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"] then
+                            ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                        end
+                    end)
+                    if label and label.Parent then
+                        label.Text = string.format("⚡ FPS: %d | Ping: %dms", fps, ping)
+                    end
+                end
+                task.wait(0.03)
+            end
+        end)
+    else
+        if fpsPingGui then
+            pcall(function() fpsPingGui:Destroy() end)
+            fpsPingGui = nil
+        end
+    end
+end
+
+-- Custom Crosshair Function
+local crosshairGui = nil
+local function setCustomCrosshair(enabled)
+    flags.customCrosshair = enabled
+    if enabled then
+        if crosshairGui then pcall(function() crosshairGui:Destroy() end) end
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "BoyeszCrosshair"
+        gui.ResetOnSpawn = false
+        gui.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+
+        local center = Instance.new("Frame")
+        center.Size = UDim2.new(0, 4, 0, 4)
+        center.Position = UDim2.new(0.5, -2, 0.5, -2)
+        center.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+        center.BorderSizePixel = 0
+        center.Parent = gui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = center
+
+        local top = Instance.new("Frame")
+        top.Size = UDim2.new(0, 2, 0, 8)
+        top.Position = UDim2.new(0.5, -1, 0.5, -12)
+        top.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+        top.BorderSizePixel = 0
+        top.Parent = gui
+
+        local bottom = Instance.new("Frame")
+        bottom.Size = UDim2.new(0, 2, 0, 8)
+        bottom.Position = UDim2.new(0.5, -1, 0.5, 4)
+        bottom.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+        bottom.BorderSizePixel = 0
+        bottom.Parent = gui
+
+        local left = Instance.new("Frame")
+        left.Size = UDim2.new(0, 8, 0, 2)
+        left.Position = UDim2.new(0.5, -12, 0.5, -1)
+        left.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+        left.BorderSizePixel = 0
+        left.Parent = gui
+
+        local right = Instance.new("Frame")
+        right.Size = UDim2.new(0, 8, 0, 2)
+        right.Position = UDim2.new(0.5, 4, 0.5, -1)
+        right.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+        right.BorderSizePixel = 0
+        right.Parent = gui
+
+        crosshairGui = gui
+    else
+        if crosshairGui then
+            pcall(function() crosshairGui:Destroy() end)
+            crosshairGui = nil
+        end
+    end
+end
+
 
 -- UI & Feature init
 local function CreateUI()
@@ -448,6 +627,20 @@ local function CreateUI()
                 end))
             end
         end
+    })
+
+    Main:CreateSection("Proteksi Karakter")
+
+    Main:CreateToggle({
+        Name = "Anti-Fling Protection",
+        CurrentValue = false,
+        Callback = setAntiFling
+    })
+
+    Main:CreateToggle({
+        Name = "Anti-Stun / Anti-Ragdoll",
+        CurrentValue = false,
+        Callback = setAntiStun
     })
 
 
@@ -671,6 +864,20 @@ local function CreateUI()
     -- 4. VISUALS & ESP TAB (Tampilan & Kamera)
     local VisualsTab = Window:CreateTab("Visuals & ESP", "eye")
     windows.Visuals = VisualsTab
+
+    VisualsTab:CreateSection("HUD & Overlay")
+
+    VisualsTab:CreateToggle({
+        Name = "FPS & Ping Display HUD",
+        CurrentValue = false,
+        Callback = setFpsPingHUD
+    })
+
+    VisualsTab:CreateToggle({
+        Name = "Custom Crosshair",
+        CurrentValue = false,
+        Callback = setCustomCrosshair
+    })
 
     VisualsTab:CreateSection("Player ESP System")
 
@@ -1407,6 +1614,25 @@ local function CreateUI()
                     if flags.antiAFK then
                         vu:CaptureController()
                         vu:ClickButton2(Vector2.new(0,0))
+                    end
+                end))
+            end
+        end
+    })
+
+    PerformanceTab:CreateToggle({
+        Name = "Auto Rejoin on Disconnect",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.autoRejoin = enabled
+            clearConn("autoRejoinError")
+            if enabled then
+                setConn("autoRejoinError", GuiService.ErrorCodeChanged:Connect(function()
+                    if flags.autoRejoin then
+                        task.wait(1)
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                        end)
                     end
                 end))
             end
