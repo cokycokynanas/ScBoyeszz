@@ -627,23 +627,84 @@ local function setAirWalk(enabled)
     end
 end
 
--- Bypass Speed Hack (CFrame Delta Step) Function
+-- Bypass Speed Hack System (3 Advanced Modes)
+local bypassMode = "LinearVelocity" -- "LinearVelocity", "Tween", "CFrame"
 local bypassSpeedMultiplier = 2.0
+local linearVelocityObj = nil
+local attachmentObj = nil
+
+local function cleanupBypassPhysics()
+    if linearVelocityObj then
+        pcall(function() linearVelocityObj:Destroy() end)
+        linearVelocityObj = nil
+    end
+    if attachmentObj then
+        pcall(function() attachmentObj:Destroy() end)
+        attachmentObj = nil
+    end
+end
+
 local function setBypassSpeed(enabled)
     flags.bypassSpeed = enabled
-    clearConn("bypassSpeedHeartbeat")
+    clearConn("bypassSpeedLoop")
+    cleanupBypassPhysics()
+
     if enabled then
-        setConn("bypassSpeedHeartbeat", RunService.Heartbeat:Connect(function(deltaTime)
+        setConn("bypassSpeedLoop", RunService.Heartbeat:Connect(function(deltaTime)
             if not flags.bypassSpeed then return end
             local char = getCharacter()
             local hum = getHumanoid()
             local hrp = getHRP()
-            if char and hum and hrp and hum.MoveDirection.Magnitude > 0 then
-                local extraSpeed = (bypassSpeedMultiplier - 1) * 16
-                local offset = hum.MoveDirection * (extraSpeed * deltaTime)
-                hrp.CFrame = hrp.CFrame + offset
+            if not char or not hum or not hrp or hum.Health <= 0 then
+                cleanupBypassPhysics()
+                return
+            end
+
+            if hum.MoveDirection.Magnitude > 0 then
+                if bypassMode == "LinearVelocity" then
+                    -- Method A: Roblox Native LinearVelocity Object (Bypasses Distance Delta Check)
+                    if not attachmentObj or attachmentObj.Parent ~= hrp then
+                        cleanupBypassPhysics()
+                        attachmentObj = Instance.new("Attachment")
+                        attachmentObj.Name = "BoyeszSpeedAttachment"
+                        attachmentObj.Parent = hrp
+
+                        linearVelocityObj = Instance.new("LinearVelocity")
+                        linearVelocityObj.Name = "BoyeszSpeedLinearVelocity"
+                        linearVelocityObj.Attachment0 = attachmentObj
+                        linearVelocityObj.MaxForce = 99999
+                        linearVelocityObj.VectorVelocity = Vector3.zero
+                        linearVelocityObj.RelativeTo = Enum.ActuatorRelativeTo.World
+                        linearVelocityObj.Parent = hrp
+                    end
+
+                    local targetSpeed = 16 * bypassSpeedMultiplier
+                    local moveDir = hum.MoveDirection
+                    linearVelocityObj.VectorVelocity = Vector3.new(moveDir.X * targetSpeed, hrp.AssemblyLinearVelocity.Y, moveDir.Z * targetSpeed)
+
+                elseif bypassMode == "Tween" then
+                    -- Method B: Smooth Tween Step (Bypasses Teleport Spike Detectors)
+                    cleanupBypassPhysics()
+                    local extraSpeed = (bypassSpeedMultiplier - 1) * 16
+                    local targetPos = hrp.Position + (hum.MoveDirection * (extraSpeed * deltaTime))
+                    local tween = game:GetService("TweenService"):Create(hrp, TweenInfo.new(deltaTime, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetPos, targetPos + hrp.CFrame.LookVector)})
+                    tween:Play()
+
+                elseif bypassMode == "CFrame" then
+                    -- Method C: Direct Velocity Pulse
+                    cleanupBypassPhysics()
+                    local targetSpeed = 16 * bypassSpeedMultiplier
+                    local moveDir = hum.MoveDirection
+                    hrp.AssemblyLinearVelocity = Vector3.new(moveDir.X * targetSpeed, hrp.AssemblyLinearVelocity.Y, moveDir.Z * targetSpeed)
+                end
+            else
+                if linearVelocityObj then
+                    linearVelocityObj.VectorVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                end
             end
         end))
+    else
+        cleanupBypassPhysics()
     end
 end
 
@@ -759,6 +820,27 @@ local function CreateUI()
             if flags.speedHack then
                 local hum = getHumanoid()
                 if hum then hum.WalkSpeed = customSpeed end
+            end
+        end
+    })
+
+    Main:CreateDropdown({
+        Name = "Bypass Speed Mode",
+        Options = {"LinearVelocity (Physics)", "Tween (Smooth)", "Assembly (Velocity)"},
+        CurrentOption = {"LinearVelocity (Physics)"},
+        MultipleOptions = false,
+        Flag = "BypassSpeedModeDropdown",
+        Callback = function(opt)
+            local chosen = (typeof(opt) == "table" and opt[1]) or opt
+            if chosen:find("LinearVelocity") then
+                bypassMode = "LinearVelocity"
+            elseif chosen:find("Tween") then
+                bypassMode = "Tween"
+            else
+                bypassMode = "CFrame"
+            end
+            if flags.bypassSpeed then
+                setBypassSpeed(true)
             end
         end
     })
