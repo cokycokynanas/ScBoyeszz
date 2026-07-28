@@ -1949,41 +1949,15 @@ local function CreateUI()
         end
     })
 
-    GameTab:CreateSection("Mine a Mountain v2 (Permanent Backup Edition)")
+    GameTab:CreateSection("Mine a Mountain v2")
 
     local function runMineAMountainV2()
         task.spawn(function()
-            local scriptContent = nil
-            local ok = false
-
-            -- Try 1: Local file on executor workspace
-            if readfile and isfile and pcall(function() return isfile("minea_mountain_v2.lua") end) and isfile("minea_mountain_v2.lua") then
-                ok, scriptContent = pcall(function() return readfile("minea_mountain_v2.lua") end)
-            end
-
-            -- Try 2: Main GitHub Repo
-            if not ok or not scriptContent or scriptContent == "" then
-                ok, scriptContent = pcall(function()
-                    return game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/minea_mountain_v2.lua")
-                end)
-            end
-
-            -- Try 3: Corrected Gist URL (Single %20)
-            if not ok or not scriptContent or scriptContent == "" or scriptContent:find("404: Not Found") then
-                ok, scriptContent = pcall(function()
-                    return game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%20a%20Mountain%20by%20DonnieAzoff")
-                end)
-            end
-
-            if ok and scriptContent and scriptContent ~= "" and not scriptContent:find("404: Not Found") then
-                local execOk, err = pcall(function()
-                    loadstring(scriptContent)()
-                end)
-                if not execOk then
-                    warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
-                end
-            else
-                warn("[Boyesz Tonz] Failed to load Mine a Mountain v2 source code")
+            local ok, err = pcall(function()
+                loadstring(game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%20a%20Mountain%20by%20DonnieAzoff"))()
+            end)
+            if not ok then
+                warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
             end
         end)
     end
