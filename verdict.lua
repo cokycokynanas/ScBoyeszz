@@ -513,6 +513,120 @@ local function setCustomCrosshair(enabled)
     end
 end
 
+-- Universal Shiftlock Function
+local shiftlockGui = nil
+local shiftlockConn = nil
+
+local function setShiftlock(enabled)
+    flags.shiftlock = enabled
+    if shiftlockConn then shiftlockConn:Disconnect() shiftlockConn = nil end
+
+    if enabled then
+        pcall(function()
+            LocalPlayer.DevEnableMouseLock = true
+        end)
+
+        if not shiftlockGui then
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "BoyeszShiftlock"
+            gui.ResetOnSpawn = false
+            gui.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+
+            local btn = Instance.new("TextButton")
+            btn.Name = "ShiftlockBtn"
+            btn.Size = UDim2.new(0, 56, 0, 56)
+            btn.Position = UDim2.new(0.85, -28, 0.55, -28)
+            btn.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+            btn.BackgroundTransparency = 0.2
+            btn.Text = "🔒 OFF"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.GothamBold
+            btn.TextSize = 11
+            btn.Active = true
+            btn.Draggable = true
+            btn.Parent = gui
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0)
+            corner.Parent = btn
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(0, 170, 255)
+            stroke.Thickness = 1.5
+            stroke.Parent = btn
+
+            local isActive = false
+            btn.MouseButton1Click:Connect(function()
+                isActive = not isActive
+                if isActive then
+                    btn.Text = "🔒 ON"
+                    btn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+                else
+                    btn.Text = "🔒 OFF"
+                    btn.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+                end
+            end)
+
+            shiftlockConn = RunService.RenderStepped:Connect(function()
+                if flags.shiftlock and isActive then
+                    local char = getCharacter()
+                    local hum = getHumanoid()
+                    if char and hum and Workspace.CurrentCamera then
+                        local lookVector = Workspace.CurrentCamera.CFrame.LookVector
+                        local hrp = char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
+                        end
+                    end
+                end
+            end)
+
+            shiftlockGui = gui
+        end
+    else
+        if shiftlockConn then shiftlockConn:Disconnect() shiftlockConn = nil end
+        if shiftlockGui then
+            pcall(function() shiftlockGui:Destroy() end)
+            shiftlockGui = nil
+        end
+    end
+end
+
+-- Air Walk Function
+local airWalkPart = nil
+local function setAirWalk(enabled)
+    flags.airWalk = enabled
+    clearConn("airWalkHeartbeat")
+    if enabled then
+        if not airWalkPart or not airWalkPart.Parent then
+            local part = Instance.new("Part")
+            part.Name = "BoyeszAirWalkPart"
+            part.Size = Vector3.new(6, 1, 6)
+            part.Transparency = 0.6
+            part.Color = Color3.fromRGB(0, 200, 255)
+            part.Material = Enum.Material.Neon
+            part.Anchored = true
+            part.CanCollide = true
+            part.Parent = Workspace
+            airWalkPart = part
+        end
+
+        setConn("airWalkHeartbeat", RunService.Heartbeat:Connect(function()
+            if not flags.airWalk or not airWalkPart then return end
+            local hrp = getHRP()
+            if hrp then
+                airWalkPart.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 3.5, hrp.Position.Z)
+            end
+        end))
+    else
+        clearConn("airWalkHeartbeat")
+        if airWalkPart then
+            pcall(function() airWalkPart:Destroy() end)
+            airWalkPart = nil
+        end
+    end
+end
+
 
 -- UI & Feature init
 local function CreateUI()
@@ -764,6 +878,7 @@ local function CreateUI()
 
     flags.cframeFly = false
     local CFloop
+    local cflySpeed = 50
 
     MovementTab:CreateToggle({
         Name = "CFly",
@@ -780,11 +895,10 @@ local function CreateUI()
                 if hum then hum.PlatformStand = true end
                 if head then head.Anchored = true end
 
-                local CFspeed = 50
                 CFloop = RunService.Heartbeat:Connect(function(deltaTime)
                     if not char or not hum or not head then return end
 
-                    local moveDirection = hum.MoveDirection * (CFspeed * deltaTime)
+                    local moveDirection = hum.MoveDirection * (cflySpeed * deltaTime)
                     local headCFrame = head.CFrame
                     local cameraCFrame = Workspace.CurrentCamera.CFrame
 
@@ -805,6 +919,17 @@ local function CreateUI()
                 if hum then hum.PlatformStand = false end
                 if head then head.Anchored = false end
             end
+        end
+    })
+
+    MovementTab:CreateSlider({
+        Name = "CFly Speed",
+        Range = {10, 300},
+        Increment = 5,
+        Suffix = "Speed",
+        CurrentValue = 50,
+        Callback = function(val)
+            cflySpeed = val
         end
     })
 
@@ -840,7 +965,19 @@ local function CreateUI()
         end
     })
 
-    MovementTab:CreateSection("Pergerakan Khusus")
+    MovementTab:CreateSection("Pijakan & Pergerakan Khusus")
+
+    MovementTab:CreateToggle({
+        Name = "Universal Shiftlock Switch (Mobile & PC)",
+        CurrentValue = false,
+        Callback = setShiftlock
+    })
+
+    MovementTab:CreateToggle({
+        Name = "Air Walk / Invisible Platform",
+        CurrentValue = false,
+        Callback = setAirWalk
+    })
 
     MovementTab:CreateToggle({
         Name = "Click Teleport",
