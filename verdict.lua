@@ -1915,10 +1915,10 @@ local function CreateUI()
     local GameTab = Window:CreateTab("Games Hub", "gamepad-2")
     windows.GameScripts = GameTab
 
-    GameTab:CreateSection("Mine a Mountain")
+    GameTab:CreateSection("Mine a Mountain v1 (Gumanba)")
 
     GameTab:CreateToggle({
-        Name = "Mine a Mountain (Auto-Execute)",
+        Name = "Mine a Mountain v1 (Auto-Execute)",
         CurrentValue = false,
         Callback = function(enabled)
             flags.mineAMountain = enabled
@@ -1928,7 +1928,7 @@ local function CreateUI()
                         loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MineaMountain"))()
                     end)
                     if not ok then
-                        warn("[Boyesz Tonz] Error executing Mine a Mountain:", err)
+                        warn("[Boyesz Tonz] Error executing Mine a Mountain v1:", err)
                     end
                 end)
             end
@@ -1936,17 +1936,58 @@ local function CreateUI()
     })
 
     GameTab:CreateButton({
-        Name = "Execute Mine a Mountain",
+        Name = "Execute Mine a Mountain v1",
         Callback = function()
             task.spawn(function()
                 local ok, err = pcall(function()
                     loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/main/MineaMountain"))()
                 end)
                 if not ok then
-                    warn("[Boyesz Tonz] Error executing Mine a Mountain:", err)
+                    warn("[Boyesz Tonz] Error executing Mine a Mountain v1:", err)
                 end
             end)
         end
+    })
+
+    GameTab:CreateSection("Mine a Mountain v2 (Permanent Backup Edition)")
+
+    local function runMineAMountainV2()
+        task.spawn(function()
+            local ok, scriptContent = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/cokycokynanas/ScBoyeszz/refs/heads/main/minea_mountain_v2.lua")
+            end)
+            if not ok or not scriptContent or scriptContent == "" then
+                ok, scriptContent = pcall(function()
+                    return game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%2520a%2520Mountain%2520by%2520DonnieAzoff")
+                end)
+            end
+            if ok and scriptContent and scriptContent ~= "" then
+                local execOk, err = pcall(function()
+                    loadstring(scriptContent)()
+                end)
+                if not execOk then
+                    warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
+                end
+            else
+                warn("[Boyesz Tonz] Failed to load Mine a Mountain v2 source code")
+            end
+        end)
+    end
+
+    GameTab:CreateToggle({
+        Name = "Mine a Mountain v2 (Auto-Execute)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.mineAMountainV2 = enabled
+            if enabled then
+                runMineAMountainV2()
+            end
+        end
+    })
+
+    GameTab:CreateButton({
+        Name = "Execute Mine a Mountain v2",
+        Callback = runMineAMountainV2
     })
 
     if game.PlaceId == 121864768012064 then
