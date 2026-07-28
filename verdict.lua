@@ -627,6 +627,26 @@ local function setAirWalk(enabled)
     end
 end
 
+-- Bypass Speed Hack (CFrame Delta Step) Function
+local bypassSpeedMultiplier = 2.0
+local function setBypassSpeed(enabled)
+    flags.bypassSpeed = enabled
+    clearConn("bypassSpeedHeartbeat")
+    if enabled then
+        setConn("bypassSpeedHeartbeat", RunService.Heartbeat:Connect(function(deltaTime)
+            if not flags.bypassSpeed then return end
+            local char = getCharacter()
+            local hum = getHumanoid()
+            local hrp = getHRP()
+            if char and hum and hrp and hum.MoveDirection.Magnitude > 0 then
+                local extraSpeed = (bypassSpeedMultiplier - 1) * 16
+                local offset = hum.MoveDirection * (extraSpeed * deltaTime)
+                hrp.CFrame = hrp.CFrame + offset
+            end
+        end))
+    end
+end
+
 
 -- UI & Feature init
 local function CreateUI()
@@ -717,7 +737,7 @@ local function CreateUI()
     })
 
     Main:CreateToggle({
-        Name = "Speed Hack",
+        Name = "Speed Hack (WalkSpeed)",
         CurrentValue = false,
         Callback = function(enabled)
             flags.speedHack = enabled
@@ -725,6 +745,38 @@ local function CreateUI()
             if hum then
                 hum.WalkSpeed = enabled and customSpeed or 16
             end
+        end
+    })
+
+    Main:CreateSlider({
+        Name = "Speed Value",
+        Range = {16, 200},
+        Increment = 1,
+        Suffix = "Speed",
+        CurrentValue = 16,
+        Callback = function(value)
+            customSpeed = value
+            if flags.speedHack then
+                local hum = getHumanoid()
+                if hum then hum.WalkSpeed = customSpeed end
+            end
+        end
+    })
+
+    Main:CreateToggle({
+        Name = "Bypass Speed Hack (Anti-Detect)",
+        CurrentValue = false,
+        Callback = setBypassSpeed
+    })
+
+    Main:CreateSlider({
+        Name = "Bypass Speed Multiplier",
+        Range = {1.2, 10},
+        Increment = 0.2,
+        Suffix = "x",
+        CurrentValue = 2,
+        Callback = function(value)
+            bypassSpeedMultiplier = value
         end
     })
 
