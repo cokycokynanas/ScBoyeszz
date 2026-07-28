@@ -347,7 +347,7 @@ local function CreateUI()
         end)
     end
     if not success or not rf then
-        warn("[BangBoyeszz] Failed to load Rayfield UI library")
+        warn("[Boyesz Tonz] Failed to load Rayfield UI library")
         return
     end
     Rayfield = rf
@@ -365,11 +365,12 @@ local function CreateUI()
     })
     windows.Window = Window
 
-    -- MAIN TAB
+    -- 1. MAIN TAB (Karakter & Fisik)
     local Main = Window:CreateTab("Main", "shield")
     windows.Main = Main
 
-    -- God Mode
+    Main:CreateSection("Karakter & Fisik")
+
     Main:CreateToggle({
         Name = "God Mode",
         CurrentValue = false,
@@ -386,15 +387,13 @@ local function CreateUI()
             end
         end
     })
-    
-    -- GHOST MODE (Penambahan Baru)
+
     Main:CreateToggle({
         Name = "Ghost Mode",
         CurrentValue = false,
         Callback = setGhostMode
     })
 
-    -- Noclip
     Main:CreateToggle({
         Name = "Noclip",
         CurrentValue = false,
@@ -424,7 +423,6 @@ local function CreateUI()
         end
     })
 
-    -- Speed Hack
     Main:CreateToggle({
         Name = "Speed Hack",
         CurrentValue = false,
@@ -437,26 +435,140 @@ local function CreateUI()
         end
     })
 
-    Main:CreateSlider({
-        Name = "Speed Value",
-        Range = {16, 200},
-        Increment = 1,
-        Suffix = "Speed",
-        CurrentValue = 16,
-        Callback = function(value)
-            customSpeed = value
-            if flags.speedHack then
-                local hum = getHumanoid()
-                if hum then hum.WalkSpeed = customSpeed end
+    Main:CreateToggle({
+        Name = "Infinite Jump",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.infiniteJump = enabled
+            clearConn("infiniteJump")
+            if enabled then
+                setConn("infiniteJump", UserInputService.JumpRequest:Connect(function()
+                    local hum = getHumanoid()
+                    if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+                end))
             end
         end
     })
-    
-    -- NEW MOVEMENT TAB
+
+
+    -- 2. COMBAT TAB (Pertempuran & Aim)
+    local CombatTab = Window:CreateTab("Combat", "sword")
+    windows.Combat = CombatTab
+
+    CombatTab:CreateSection("Aimbot Lock")
+
+    CombatTab:CreateDropdown({
+        Name = "Target Bagian Tubuh",
+        Options = {"Head", "Torso", "LeftLeg"},
+        CurrentOption = {"Head"},
+        MultipleOptions = false,
+        Flag = "AimbotPartDropdown",
+        Callback = function(option)
+            selectedAimbotPart = (typeof(option) == "table" and option[1]) or option
+            aimbotTarget = nil
+        end,
+    })
+
+    local function getAimbotPlayerOptions()
+        local options = {""}
+        for _, name in ipairs(sortedPlayerNames()) do
+            table.insert(options, name)
+        end
+        return options
+    end
+
+    local AimbotPlayerDropdown = CombatTab:CreateDropdown({
+        Name = "Pilih Target (Kosong = Terdekat)",
+        Options = getAimbotPlayerOptions(),
+        CurrentOption = {""},
+        MultipleOptions = false,
+        Flag = "AimbotPlayerDropdown",
+        Callback = function(option)
+            local opt = (typeof(option) == "table" and option[1]) or option
+            selectedAimbotPlayerName = (opt == "") and nil or opt
+            aimbotTarget = nil
+        end,
+    })
+
+    setConn("aimbotPlayerAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() AimbotPlayerDropdown:Refresh(getAimbotPlayerOptions(), true) end)
+    end))
+    setConn("aimbotPlayerRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() AimbotPlayerDropdown:Refresh(getAimbotPlayerOptions(), true) end)
+    end))
+
+    CombatTab:CreateToggle({
+        Name = "Aimbot Lock",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.aimbotLock = enabled
+            clearConn("aimbot")
+            aimbotTarget = nil
+            if enabled then
+                setConn("aimbot", RunService.RenderStepped:Connect(doAimbot))
+            end
+        end
+    })
+
+    CombatTab:CreateSection("Hitbox Expander")
+
+    CombatTab:CreateSlider({
+        Name = "Multiplier Value",
+        Range = {1, 10},
+        Increment = 0.5,
+        Suffix = "x",
+        CurrentValue = 1,
+        Callback = function(value)
+            hitboxMultipler = value
+            if flags.hitboxExpander then
+                setHitbox(true)
+            end
+        end
+    })
+
+    CombatTab:CreateToggle({
+        Name = "Enable Hitbox",
+        CurrentValue = false,
+        Callback = setHitbox
+    })
+
+    CombatTab:CreateSection("Kill Aura")
+
+    CombatTab:CreateToggle({
+        Name = "Kill Aura",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.killAura = enabled
+            clearConn("killAuraLoop")
+            if enabled then
+                task.spawn(function()
+                    while flags.killAura do
+                        doKillAura()
+                        task.wait(0.1)
+                    end
+                end)
+            end
+        end
+    })
+
+    CombatTab:CreateSlider({
+        Name = "Kill Aura Delay",
+        Range = {0.1, 5},
+        Increment = 0.1,
+        Suffix = "s",
+        CurrentValue = 0.5,
+        Callback = function(value)
+            killAuraDelay = value
+        end
+    })
+
+
+    -- 3. MOVEMENT TAB (Pergerakan & Terbang)
     local MovementTab = Window:CreateTab("Movement", "zap")
     windows.Movement = MovementTab
 
-    -- CFly (Head Anchor Method, Speed 50)
+    MovementTab:CreateSection("Terbang (Flight)")
+
     flags.cframeFly = false
     local CFloop
 
@@ -503,7 +615,6 @@ local function CreateUI()
         end
     })
 
-    -- Fly Script (External Pastebin)
     MovementTab:CreateToggle({
         Name = "Fly Script (Auto-Execute)",
         CurrentValue = false,
@@ -536,24 +647,325 @@ local function CreateUI()
         end
     })
 
-    -- Infinite Jump
+    MovementTab:CreateSection("Pergerakan Khusus")
+
     MovementTab:CreateToggle({
-        Name = "Infinite Jump",
+        Name = "Click Teleport",
         CurrentValue = false,
         Callback = function(enabled)
-            flags.infiniteJump = enabled
-            clearConn("infiniteJump")
+            flags.clickTeleport = enabled
+            clearConn("clickTeleport")
             if enabled then
-                setConn("infiniteJump", UserInputService.JumpRequest:Connect(function()
-                    local hum = getHumanoid()
-                    if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+                local mouse = LocalPlayer:GetMouse()
+                setConn("clickTeleport", mouse.Button1Down:Connect(function()
+                    local hrp = getHRP()
+                    if hrp and mouse.Hit then
+                        hrp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,5,0))
+                    end
                 end))
             end
         end
     })
 
-    -- Fullbright
-    MovementTab:CreateToggle({
+
+    -- 4. VISUALS & ESP TAB (Tampilan & Kamera)
+    local VisualsTab = Window:CreateTab("Visuals & ESP", "eye")
+    windows.Visuals = VisualsTab
+
+    VisualsTab:CreateSection("Player ESP System")
+
+    flags.playerESP = false
+    flags.highlightESP = false
+    local espTable = {}
+
+    local function createBillboard(targetCharacter)
+        local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "PlayerESP_BB"
+        billboard.Adornee = hrp
+        billboard.Size = UDim2.new(0, 160, 0, 45)
+        billboard.AlwaysOnTop = true
+        billboard.ExtentsOffset = Vector3.new(0, 3.5, 0)
+        
+        local card = Instance.new("Frame")
+        card.Name = "Card"
+        card.Size = UDim2.new(1, 0, 1, 0)
+        card.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+        card.BackgroundTransparency = 0.25
+        card.BorderSizePixel = 0
+        card.Parent = billboard
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = card
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "Stroke"
+        stroke.Color = Color3.fromRGB(0, 170, 255)
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.3
+        stroke.Parent = card
+
+        local text = Instance.new("TextLabel")
+        text.Name = "InfoText"
+        text.Size = UDim2.new(1, -10, 0, 20)
+        text.Position = UDim2.new(0, 5, 0, 3)
+        text.Text = targetCharacter.Name
+        text.TextColor3 = Color3.fromRGB(255, 255, 255)
+        text.TextStrokeTransparency = 0.6
+        text.BackgroundTransparency = 1
+        text.Font = Enum.Font.GothamBold
+        text.TextSize = 12
+        text.Parent = card
+
+        local healthBg = Instance.new("Frame")
+        healthBg.Name = "HealthBg"
+        healthBg.Size = UDim2.new(1, -16, 0, 6)
+        healthBg.Position = UDim2.new(0, 8, 1, -11)
+        healthBg.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+        healthBg.BorderSizePixel = 0
+        healthBg.Parent = card
+
+        local healthCorner = Instance.new("UICorner")
+        healthCorner.CornerRadius = UDim.new(0, 3)
+        healthCorner.Parent = healthBg
+
+        local healthFill = Instance.new("Frame")
+        healthFill.Name = "HealthFill"
+        healthFill.Size = UDim2.new(1, 0, 1, 0)
+        healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+        healthFill.BorderSizePixel = 0
+        healthFill.Parent = healthBg
+
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(0, 3)
+        fillCorner.Parent = healthFill
+        
+        billboard.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        return billboard
+    end
+
+    local function createHighlight(targetCharacter)
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "PlayerESP_Highlight"
+        highlight.Adornee = targetCharacter
+        highlight.FillColor = Color3.fromRGB(255, 50, 50)
+        highlight.FillTransparency = 0.55
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineTransparency = 0.1
+        highlight.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        return highlight
+    end
+
+    local function removeESPForPlayer(plr)
+        if espTable[plr] then
+            if espTable[plr].Billboard then
+                pcall(function() espTable[plr].Billboard:Destroy() end)
+            end
+            if espTable[plr].Highlight then
+                pcall(function() espTable[plr].Highlight:Destroy() end)
+            end
+            espTable[plr] = nil
+        end
+    end
+
+    local function removeAllESP()
+        for plr, _ in pairs(espTable) do
+            removeESPForPlayer(plr)
+        end
+        espTable = {}
+    end
+
+    local function updateESP()
+        if not flags.playerESP and not flags.highlightESP then
+            removeAllESP()
+            return
+        end
+
+        local myHRP = getHRP()
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local char = plr.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+                if char and hum and hrp and hum.Health > 0 then
+                    if not espTable[plr] then
+                        espTable[plr] = {}
+                    end
+
+                    if flags.playerESP then
+                        if not espTable[plr].Billboard or not espTable[plr].Billboard.Parent then
+                            espTable[plr].Billboard = createBillboard(char)
+                        end
+
+                        local bb = espTable[plr].Billboard
+                        if bb and bb:FindFirstChild("Card") then
+                            local card = bb.Card
+                            local infoText = card:FindFirstChild("InfoText")
+                            local healthFill = card:FindFirstChild("HealthBg") and card.HealthBg:FindFirstChild("HealthFill")
+                            local stroke = card:FindFirstChild("Stroke")
+
+                            local healthPercent = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+                            local dist = myHRP and math.floor((myHRP.Position - hrp.Position).Magnitude) or 0
+
+                            if infoText then
+                                infoText.Text = string.format("%s | %d HP | %dm", plr.Name, math.floor(hum.Health), dist)
+                            end
+
+                            if healthFill then
+                                healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                                if healthPercent > 0.6 then
+                                    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+                                elseif healthPercent > 0.3 then
+                                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+                                else
+                                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                                end
+                            end
+
+                            if stroke then
+                                if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
+                                    stroke.Color = Color3.fromRGB(0, 255, 150)
+                                else
+                                    stroke.Color = Color3.fromRGB(255, 60, 60)
+                                end
+                            end
+                        end
+                    else
+                        if espTable[plr].Billboard then
+                            pcall(function() espTable[plr].Billboard:Destroy() end)
+                            espTable[plr].Billboard = nil
+                        end
+                    end
+
+                    if flags.highlightESP then
+                        if not espTable[plr].Highlight or not espTable[plr].Highlight.Parent then
+                            espTable[plr].Highlight = createHighlight(char)
+                        end
+                    else
+                        if espTable[plr].Highlight then
+                            pcall(function() espTable[plr].Highlight:Destroy() end)
+                            espTable[plr].Highlight = nil
+                        end
+                    end
+                else
+                    removeESPForPlayer(plr)
+                end
+            else
+                removeESPForPlayer(plr)
+            end
+        end
+    end
+
+    VisualsTab:CreateToggle({
+        Name = "Name & Health Bar ESP",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.playerESP = enabled
+            if not enabled and not flags.highlightESP then
+                removeAllESP()
+            end
+        end
+    })
+
+    VisualsTab:CreateToggle({
+        Name = "Chams Glow ESP (Through Walls)",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.highlightESP = enabled
+            if not enabled and not flags.playerESP then
+                removeAllESP()
+            end
+        end
+    })
+
+    VisualsTab:CreateButton({
+        Name = "Refresh ESP",
+        Callback = function()
+            removeAllESP()
+            updateESP()
+        end
+    })
+
+    setConn("espRender", RunService.RenderStepped:Connect(function()
+        if flags.playerESP or flags.highlightESP then
+            pcall(updateESP)
+        end
+    end))
+
+    setConn("espPlayerRemoving", Players.PlayerRemoving:Connect(function(plr)
+        removeESPForPlayer(plr)
+    end))
+
+    VisualsTab:CreateSection("Kamera & Lingkungan")
+
+    local spectateTargetName = nil
+    local viewDiedConn = nil
+    local viewChangedConn = nil
+
+    local SpectateDropdown = VisualsTab:CreateDropdown({
+        Name = "Pilih Pemain (Spectate)",
+        Options = sortedPlayerNames(),
+        CurrentOption = {},
+        MultipleOptions = false,
+        Flag = "SpectateDropdown",
+        Callback = function(opt)
+            spectateTargetName = (typeof(opt) == "table" and opt[1]) or opt
+        end
+    })
+
+    setConn("specAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
+    end))
+    setConn("specRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
+    end))
+
+    VisualsTab:CreateButton({
+        Name = "Mulai Spectate",
+        Callback = function()
+            if not spectateTargetName or spectateTargetName == "" then return end
+            local target = Players:FindFirstChild(spectateTargetName)
+            if not target or not target.Character then return end
+
+            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
+            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
+
+            Workspace.CurrentCamera.CameraSubject = target.Character
+            viewDiedConn = target.CharacterAdded:Connect(function()
+                repeat task.wait() until target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+                Workspace.CurrentCamera.CameraSubject = target.Character
+            end)
+            viewChangedConn = Workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+                if target and target.Character then
+                    Workspace.CurrentCamera.CameraSubject = target.Character
+                end
+            end)
+        end
+    })
+
+    VisualsTab:CreateButton({
+        Name = "Berhenti Spectate",
+        Callback = function()
+            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
+            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
+            local char = getCharacter()
+            if char then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    Workspace.CurrentCamera.CameraSubject = humanoid
+                else
+                    Workspace.CurrentCamera.CameraSubject = char
+                end
+            end
+        end
+    })
+
+    VisualsTab:CreateToggle({
         Name = "Fullbright",
         CurrentValue = false,
         Callback = function(enabled)
@@ -581,168 +993,11 @@ local function CreateUI()
         end
     })
 
-    -- Click Teleport
-    MovementTab:CreateToggle({
-        Name = "Click Teleport",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.clickTeleport = enabled
-            clearConn("clickTeleport")
-            if enabled then
-                local mouse = LocalPlayer:GetMouse()
-                setConn("clickTeleport", mouse.Button1Down:Connect(function()
-                    local hrp = getHRP()
-                    if hrp and mouse.Hit then
-                        hrp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,5,0))
-                    end
-                end))
-            end
-        end
-    })
-    
-    -- === TAB COMBAT ===
-    local CombatTab = Window:CreateTab("Combat", "sword")
-    windows.Combat = CombatTab
-    
-    -- MODIFIED Aimbot
-    CombatTab:CreateSection("Aimbot")
-    
-    -- NEW: Dropdown untuk memilih bagian tubuh
-    CombatTab:CreateDropdown({
-        Name = "Target Bagian Tubuh",
-        Options = {"Head", "Torso", "LeftLeg"}, -- Pilihan bagian tubuh
-        CurrentOption = {"Head"},
-        MultipleOptions = false,
-        Flag = "AimbotPartDropdown",
-        Callback = function(option)
-            selectedAimbotPart = (typeof(option) == "table" and option[1]) or option
-            aimbotTarget = nil -- Reset target
-        end,
-    })
 
-    local function getAimbotPlayerOptions()
-        local options = {""} -- Opsi pertama adalah string kosong untuk "Terdekat"
-        for _, name in ipairs(sortedPlayerNames()) do
-            table.insert(options, name)
-        end
-        return options
-    end
-
-    local AimbotPlayerDropdown = CombatTab:CreateDropdown({
-        Name = "Pilih Target (Kosong = Terdekat)",
-        Options = getAimbotPlayerOptions(),
-        CurrentOption = {""},
-        MultipleOptions = false,
-        Flag = "AimbotPlayerDropdown",
-        Callback = function(option)
-            local opt = (typeof(option) == "table" and option[1]) or option
-            selectedAimbotPlayerName = (opt == "") and nil or opt
-            aimbotTarget = nil -- Reset target
-        end,
-    })
-    
-    -- Koneksi Refresh Dropdown Aimbot
-    setConn("aimbotPlayerAdd", Players.PlayerAdded:Connect(function()
-        pcall(function() AimbotPlayerDropdown:Refresh(getAimbotPlayerOptions(), true) end)
-    end))
-    setConn("aimbotPlayerRem", Players.PlayerRemoving:Connect(function()
-        pcall(function() AimbotPlayerDropdown:Refresh(getAimbotPlayerOptions(), true) end)
-    end))
-
-    CombatTab:CreateSlider({
-        Name = "Aimbot Range",
-        Range = {50, 500},
-        Increment = 10,
-        Suffix = "Studs",
-        CurrentValue = 150,
-        Callback = function(value)
-            aimbotRange = value
-        end
-    })
-
-    CombatTab:CreateToggle({
-        Name = "Aimbot Lock",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.aimbotLock = enabled
-            clearConn("aimbot")
-            aimbotTarget = nil
-            if enabled then
-                -- Set koneksi untuk mengunci target
-                setConn("aimbot", RunService.RenderStepped:Connect(doAimbot))
-            end
-        end
-    })
-    
-    -- MODIFIED Hitbox Expander
-    CombatTab:CreateSection("Hitbox Expander")
-
-    CombatTab:CreateSlider({
-        Name = "Multiplier Value",
-        Range = {1, 10},
-        Increment = 0.5,
-        Suffix = "x",
-        CurrentValue = 1,
-        Callback = function(value)
-            hitboxMultipler = value
-            if flags.hitboxExpander then -- Terapkan perubahan langsung jika aktif
-                setHitbox(true)
-            end
-        end
-    })
-
-    CombatTab:CreateToggle({
-        Name = "Enable Hitbox",
-        CurrentValue = false,
-        Callback = setHitbox
-    })
-    
-    -- Kill Aura
-    CombatTab:CreateSection("Kill Aura")
-    CombatTab:CreateToggle({
-        Name = "Kill Aura",
-        CurrentValue = false,
-        Callback = function(enabled)
-            flags.killAura = enabled
-            clearConn("killAuraLoop")
-            if enabled then
-                task.spawn(function()
-                    while flags.killAura do
-                        doKillAura()
-                        task.wait(0.1)
-                    end
-                end)
-            end
-        end
-    })
-
-    CombatTab:CreateSlider({
-        Name = "Kill Aura Range",
-        Range = {5, 100},
-        Increment = 5,
-        Suffix = "Studs",
-        CurrentValue = 25,
-        Callback = function(value)
-            killAuraRange = value
-        end
-    })
-
-    CombatTab:CreateSlider({
-        Name = "Kill Aura Delay",
-        Range = {0.1, 5},
-        Increment = 0.1,
-        Suffix = "s",
-        CurrentValue = 0.5,
-        Callback = function(value)
-            killAuraDelay = value
-        end
-    })
-
-    -- TELEPORT TAB
+    -- 5. TELEPORT TAB (Teleport & Server)
     local TeleportTab = Window:CreateTab("Teleport", "map-pin")
     windows.Teleport = TeleportTab
 
-    -- SERVER HOP & REJOIN SECTION
     TeleportTab:CreateSection("Server Hop & Rejoin")
 
     TeleportTab:CreateButton({
@@ -779,39 +1034,6 @@ local function CreateUI()
     })
 
     TeleportTab:CreateButton({
-        Name = "Server Hop (Pengguna Ramai / High Players)",
-        Callback = function()
-            task.spawn(function()
-                local placeId = game.PlaceId
-                local req = (syn and syn.request) or (http and http.request) or http_request or request
-                local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", placeId)
-                
-                local servers = {}
-                pcall(function()
-                    if req then
-                        local res = req({Url = url, Method = "GET"})
-                        if res and res.Body then
-                            local data = HttpService:JSONDecode(res.Body)
-                            if data and data.data then servers = data.data end
-                        end
-                    else
-                        local resData = game:HttpGet(url)
-                        local data = HttpService:JSONDecode(resData)
-                        if data and data.data then servers = data.data end
-                    end
-                end)
-
-                for _, server in ipairs(servers) do
-                    if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                        TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
-                        break
-                    end
-                end
-            end)
-        end
-    })
-
-    TeleportTab:CreateButton({
         Name = "Rejoin Current Server",
         Callback = function()
             pcall(function()
@@ -820,25 +1042,7 @@ local function CreateUI()
         end
     })
 
-    TeleportTab:CreateToggle({
-        Name = "Anti-AFK Protection (Auto 20m Kick Guard)",
-        CurrentValue = true,
-        Callback = function(enabled)
-            flags.antiAFK = enabled
-            clearConn("antiAFKConn")
-            if enabled then
-                local vu = game:GetService("VirtualUser")
-                setConn("antiAFKConn", LocalPlayer.Idled:Connect(function()
-                    if flags.antiAFK then
-                        vu:CaptureController()
-                        vu:ClickButton2(Vector2.new(0,0))
-                    end
-                end))
-            end
-        end
-    })
-
-    TeleportTab:CreateSection("Pilih pemain untuk teleport")
+    TeleportTab:CreateSection("Pilih Pemain untuk Teleport")
     local selectedPlayerName = nil
     local function playerOptions()
         local t = {}
@@ -872,9 +1076,7 @@ local function CreateUI()
     TeleportTab:CreateButton({
         Name = "Teleport ke Pemain",
         Callback = function()
-            if not selectedPlayerName or selectedPlayerName == "" then
-                return
-            end
+            if not selectedPlayerName or selectedPlayerName == "" then return end
             local target = Players:FindFirstChild(selectedPlayerName)
             if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                 local hrp = getHRP()
@@ -892,8 +1094,7 @@ local function CreateUI()
         end
     })
 
-    -- Save & Teleport Pos
-    TeleportTab:CreateSection("Save & Teleport Pos")
+    TeleportTab:CreateSection("Save Position Slots (1 - 30)")
     local savedSlots = { nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil}
     local slotSelected = 1
 
@@ -910,17 +1111,13 @@ local function CreateUI()
 
     TeleportTab:CreateButton({ Name = "Save Pos", Callback = function()
         local hrp = getHRP()
-        if hrp then
-            savedSlots[slotSelected] = hrp.Position
-        end
+        if hrp then savedSlots[slotSelected] = hrp.Position end
     end })
 
     TeleportTab:CreateButton({ Name = "Teleport Pos", Callback = function()
         if savedSlots[slotSelected] then
             local hrp = getHRP()
-            if hrp then
-                hrp.CFrame = CFrame.new(savedSlots[slotSelected] + Vector3.new(0,5,0))
-            end
+            if hrp then hrp.CFrame = CFrame.new(savedSlots[slotSelected] + Vector3.new(0,5,0)) end
         end
     end })
 
@@ -932,11 +1129,10 @@ local function CreateUI()
         for i=1,30 do savedSlots[i] = nil end
     end })
 
-    -- FLOATING TELEPORT WIDGET SYSTEM (Slots 1 to 10)
     TeleportTab:CreateSection("Quick Floating Teleports (Slots 1 - 10)")
 
-    local floatingTPWidgets = {} -- { [slotId] = ScreenGui }
-    local quickSavedCFrames = {} -- { [slotId] = CFrame }
+    local floatingTPWidgets = {}
+    local quickSavedCFrames = {}
     local selectedWidgetSlot = 1
 
     local function createFloatingTPWidget(slotId)
@@ -1106,76 +1302,13 @@ local function CreateUI()
     })
 
 
-    local MiscTab = Window:CreateTab("Misc", "settings")
-    windows.Misc = MiscTab
-    
-    MiscTab:CreateSection("Spectate Player")
-    local spectateTargetName = nil
-    local viewDiedConn = nil
-    local viewChangedConn = nil
+    -- 6. PERFORMANCE TAB (Performa & System)
+    local PerformanceTab = Window:CreateTab("Performance", "gauge")
+    windows.Performance = PerformanceTab
 
-    local SpectateDropdown = MiscTab:CreateDropdown({
-        Name = "Pilih Pemain",
-        Options = sortedPlayerNames(),
-        CurrentOption = {},
-        MultipleOptions = false,
-        Flag = "SpectateDropdown",
-        Callback = function(opt)
-            spectateTargetName = (typeof(opt) == "table" and opt[1]) or opt
-        end
-    })
+    PerformanceTab:CreateSection("FPS Boost & Anti-Lag")
 
-    setConn("specAdd", Players.PlayerAdded:Connect(function()
-        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
-    end))
-    setConn("specRem", Players.PlayerRemoving:Connect(function()
-        pcall(function() SpectateDropdown:Refresh(sortedPlayerNames(), true) end)
-    end))
-
-    MiscTab:CreateButton({
-        Name = "Mulai Spectate",
-        Callback = function()
-            if not spectateTargetName or spectateTargetName == "" then return end
-            local target = Players:FindFirstChild(spectateTargetName)
-            if not target or not target.Character then return end
-
-            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
-            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
-
-            Workspace.CurrentCamera.CameraSubject = target.Character
-            viewDiedConn = target.CharacterAdded:Connect(function()
-                repeat task.wait() until target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-                Workspace.CurrentCamera.CameraSubject = target.Character
-            end)
-            viewChangedConn = Workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if target and target.Character then
-                    Workspace.CurrentCamera.CameraSubject = target.Character
-                end
-            end)
-        end
-    })
-
-    MiscTab:CreateButton({
-        Name = "Berhenti Spectate",
-        Callback = function()
-            if viewDiedConn then viewDiedConn:Disconnect(); viewDiedConn = nil end
-            if viewChangedConn then viewChangedConn:Disconnect(); viewChangedConn = nil end
-            local char = getCharacter()
-            if char then
-                local humanoid = getHumanoid()
-                if humanoid then
-                    Workspace.CurrentCamera.CameraSubject = humanoid
-                else
-                    Workspace.CurrentCamera.CameraSubject = char
-                end
-            end
-        end
-    })
-
-    -- FPS BOOST & PERFORMANCE SECTION
-    MiscTab:CreateSection("FPS Boost & Anti-Lag")
-
-    MiscTab:CreateButton({
+    PerformanceTab:CreateButton({
         Name = "Unlock FPS (Set 240 FPS)",
         Callback = function()
             if setfpscap then
@@ -1185,7 +1318,7 @@ local function CreateUI()
     })
 
     local originalGlobalShadows = Lighting.GlobalShadows
-    MiscTab:CreateToggle({
+    PerformanceTab:CreateToggle({
         Name = "FPS Boost (Standard Anti-Lag)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1223,7 +1356,7 @@ local function CreateUI()
         end
     })
 
-    MiscTab:CreateButton({
+    PerformanceTab:CreateButton({
         Name = "Ultra FPS Boost (Remove Textures & Effects)",
         Callback = function()
             pcall(function()
@@ -1260,8 +1393,29 @@ local function CreateUI()
         end
     })
 
-    -- GAME SCRIPTS TAB
-    local GameTab = Window:CreateTab("Game Scripts", "gamepad-2")
+    PerformanceTab:CreateSection("Protection")
+
+    PerformanceTab:CreateToggle({
+        Name = "Anti-AFK Protection (Auto 20m Kick Guard)",
+        CurrentValue = true,
+        Callback = function(enabled)
+            flags.antiAFK = enabled
+            clearConn("antiAFKConn")
+            if enabled then
+                local vu = game:GetService("VirtualUser")
+                setConn("antiAFKConn", LocalPlayer.Idled:Connect(function()
+                    if flags.antiAFK then
+                        vu:CaptureController()
+                        vu:ClickButton2(Vector2.new(0,0))
+                    end
+                end))
+            end
+        end
+    })
+
+
+    -- 7. GAMES HUB TAB (Script Game Spesifik)
+    local GameTab = Window:CreateTab("Games Hub", "gamepad-2")
     windows.GameScripts = GameTab
 
     GameTab:CreateSection("Mine a Mountain")
@@ -1298,355 +1452,107 @@ local function CreateUI()
         end
     })
 
-    -- FISH IT TAB
-    local function AddFishItTab()
-        if game.PlaceId ~= 121864768012064 then return end
-        if windows.FishIt then return end
+    if game.PlaceId == 121864768012064 then
+        GameTab:CreateSection("Fish It Game")
 
         local ok, netRoot = pcall(function()
             return ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")
                 :WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
         end)
-        if not ok or not netRoot then
-            return
-        end
 
-        local FishItTab = Window:CreateTab("Fish It", "fish")
-        windows.FishIt = FishItTab
+        if ok and netRoot then
+            flags.autofish = false
+            flags.perfectCast = true
 
-        flags.autofish = false
-        flags.perfectCast = true
+            local equipRemote = netRoot:FindFirstChild("RE/EquipToolFromHotbar")
+            local rodRemote = netRoot:FindFirstChild("RF/ChargeFishingRod")
+            local miniGameRemote = netRoot:FindFirstChild("RF/RequestFishingMinigameStarted")
+            local finishRemote = netRoot:FindFirstChild("RE/FishingCompleted")
 
-        local equipRemote = netRoot:FindFirstChild("RE/EquipToolFromHotbar")
-        local rodRemote = netRoot:FindFirstChild("RF/ChargeFishingRod")
-        local miniGameRemote = netRoot:FindFirstChild("RF/RequestFishingMinigameStarted")
-        local finishRemote = netRoot:FindFirstChild("RE/FishingCompleted")
-
-        FishItTab:CreateToggle({
-            Name = "Enable Auto Fish",
-            CurrentValue = false,
-            Callback = function(val)
-                flags.autofish = val
-                if val then
-                    task.spawn(function()
-                        while flags.autofish do
-                            if equipRemote and rodRemote and miniGameRemote and finishRemote then
-                                pcall(function()
-                                    equipRemote:FireServer(1)
-                                    task.wait(0.12)
-                                    local timestamp = flags.perfectCast and 9999999999 or tick()
-                                    rodRemote:InvokeServer(timestamp)
-                                    task.wait(0.12)
-                                    local x, y = -1.238, 0.969
-                                    if not flags.perfectCast then
-                                        x = math.random(-1000,1000)/1000
-                                        y = math.random(0,1000)/1000
-                                    end
-                                    miniGameRemote:InvokeServer(x, y)
-                                    task.wait(1.3)
-                                    finishRemote:FireServer()
-                                end)
-                            else
-                                flags.autofish = false
-                                break
-                            end
-                            for i=1,14 do
-                                if not flags.autofish then break end
-                                task.wait(0.1)
-                            end
-                        end
-                    end)
-                else
-                end
-            end
-        })
-
-        FishItTab:CreateToggle({
-            Name = "Use Perfect Cast",
-            CurrentValue = true,
-            Callback = function(v) flags.perfectCast = v end
-        })
-
-        local islandCoords = {
-            { name = "Weather Machine", position = Vector3.new(-1471, -3, 1929) },
-            { name = "Esoteric Depths", position = Vector3.new(3157, -1303, 1439) },
-            { name = "Tropical Grove", position = Vector3.new(-2038, 3, 3650) },
-            { name = "Stingray Shores", position = Vector3.new(-32, 4, 2773) },
-            { name = "Kohana Volcano", position = Vector3.new(-519, 24, 189) },
-            { name = "Coral Reefs", position = Vector3.new(-3095, 1, 2177) },
-            { name = "Crater Island", position = Vector3.new(968, 1, 4854) },
-            { name = "Kohana", position = Vector3.new(-658, 3, 719) },
-            { name = "Winter Fest", position = Vector3.new(1611, 4, 3280) },
-            { name = "Isoteric Island", position = Vector3.new(1987, 4, 1400) },
-            { name = "Treasure Hall", position = Vector3.new(-3600, -267, -1558) },
-            { name = "Lost Shore", position = Vector3.new(-3663, 38, -989) },
-        }
-        table.sort(islandCoords, function(a,b) return a.name < b.name end)
-        local islandNames, nameToPos = {}, {}
-        for _, info in ipairs(islandCoords) do
-            table.insert(islandNames, info.name)
-            nameToPos[info.name] = info.position
-        end
-
-        FishItTab:CreateDropdown({
-            Name = "Pilih Island",
-            Options = islandNames,
-            CurrentOption = {},
-            MultipleOptions = false,
-            Flag = "FishItIslandDropdown",
-            Callback = function(option)
-                local chosen = (typeof(option) == "table" and option[1]) or option
-                if not chosen then return end
-                local pos = nameToPos[chosen]
-                if not pos then return end
-                local hrp = getHRP()
-                if hrp then
-                    hrp.CFrame = CFrame.new(pos + Vector3.new(0,5,0))
-                end
-            end
-        })
-    end
-
-    -- === KODE PLAYER ESP DIMULAI DI SINI ===
-    local function AddESPTab(Window)
-        local ESPTab = Window:CreateTab("ESP", "eye")
-        windows.ESP = ESPTab
-        
-        flags.playerESP = false
-        flags.highlightESP = false
-        local espTable = {} -- { TargetPlayer = { Billboard, Highlight }, ... }
-        
-        -- Helper untuk membuat BillboardGui modern (Card + Health Bar + Name/Distance)
-        local function createBillboard(targetCharacter)
-            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
-            if not hrp then return nil end
-
-            local billboard = Instance.new("BillboardGui")
-            billboard.Name = "PlayerESP_BB"
-            billboard.Adornee = hrp
-            billboard.Size = UDim2.new(0, 160, 0, 45)
-            billboard.AlwaysOnTop = true
-            billboard.ExtentsOffset = Vector3.new(0, 3.5, 0)
-            
-            local card = Instance.new("Frame")
-            card.Name = "Card"
-            card.Size = UDim2.new(1, 0, 1, 0)
-            card.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
-            card.BackgroundTransparency = 0.25
-            card.BorderSizePixel = 0
-            card.Parent = billboard
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 6)
-            corner.Parent = card
-
-            local stroke = Instance.new("UIStroke")
-            stroke.Name = "Stroke"
-            stroke.Color = Color3.fromRGB(0, 170, 255)
-            stroke.Thickness = 1.5
-            stroke.Transparency = 0.3
-            stroke.Parent = card
-
-            local text = Instance.new("TextLabel")
-            text.Name = "InfoText"
-            text.Size = UDim2.new(1, -10, 0, 20)
-            text.Position = UDim2.new(0, 5, 0, 3)
-            text.Text = targetCharacter.Name
-            text.TextColor3 = Color3.fromRGB(255, 255, 255)
-            text.TextStrokeTransparency = 0.6
-            text.BackgroundTransparency = 1
-            text.Font = Enum.Font.GothamBold
-            text.TextSize = 12
-            text.Parent = card
-
-            local healthBg = Instance.new("Frame")
-            healthBg.Name = "HealthBg"
-            healthBg.Size = UDim2.new(1, -16, 0, 6)
-            healthBg.Position = UDim2.new(0, 8, 1, -11)
-            healthBg.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
-            healthBg.BorderSizePixel = 0
-            healthBg.Parent = card
-
-            local healthCorner = Instance.new("UICorner")
-            healthCorner.CornerRadius = UDim.new(0, 3)
-            healthCorner.Parent = healthBg
-
-            local healthFill = Instance.new("Frame")
-            healthFill.Name = "HealthFill"
-            healthFill.Size = UDim2.new(1, 0, 1, 0)
-            healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
-            healthFill.BorderSizePixel = 0
-            healthFill.Parent = healthBg
-
-            local fillCorner = Instance.new("UICorner")
-            fillCorner.CornerRadius = UDim.new(0, 3)
-            fillCorner.Parent = healthFill
-            
-            billboard.Parent = LocalPlayer:WaitForChild("PlayerGui")
-            return billboard
-        end
-
-        -- Helper untuk membuat Highlight ESP (Chams Glow through walls)
-        local function createHighlight(targetCharacter)
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "PlayerESP_Highlight"
-            highlight.Adornee = targetCharacter
-            highlight.FillColor = Color3.fromRGB(255, 50, 50)
-            highlight.FillTransparency = 0.55
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.OutlineTransparency = 0.1
-            highlight.Parent = LocalPlayer:WaitForChild("PlayerGui")
-            return highlight
-        end
-        
-        -- Helper untuk menghapus visual ESP
-        local function cleanupESP(player)
-            if espTable[player] then
-                if espTable[player].Billboard then
-                    pcall(function() espTable[player].Billboard:Destroy() end)
-                end
-                if espTable[player].Highlight then
-                    pcall(function() espTable[player].Highlight:Destroy() end)
-                end
-                espTable[player] = nil
-            end
-        end
-        
-        -- Main ESP Loop
-        local function updateESP()
-            if not flags.playerESP and not flags.highlightESP then return end
-
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    local char = player.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    local hum = char and char:FindFirstChildOfClass("Humanoid")
-                    local isAlive = hrp and hum and hum.Health > 0
-
-                    if isAlive then
-                        espTable[player] = espTable[player] or {}
-                        local isTeammate = (player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team)
-
-                        -- 1. Name Tag + Health Bar ESP
-                        if flags.playerESP then
-                            if not espTable[player].Billboard or not espTable[player].Billboard.Parent then
-                                espTable[player].Billboard = createBillboard(char)
-                            end
-
-                            local bb = espTable[player].Billboard
-                            if bb then
-                                bb.Adornee = hrp
-                                local card = bb:FindFirstChild("Card")
-                                if card then
-                                    local textLabel = card:FindFirstChild("InfoText")
-                                    local healthBg = card:FindFirstChild("HealthBg")
-                                    local healthFill = healthBg and healthBg:FindFirstChild("HealthFill")
-                                    local stroke = card:FindFirstChild("Stroke")
-
-                                    local myHRP = getHRP()
-                                    local dist = myHRP and math.floor((myHRP.Position - hrp.Position).Magnitude) or 0
-                                    local healthPct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-
-                                    if textLabel then
-                                        textLabel.Text = string.format("%s | %d HP (%dm)", player.Name, math.floor(hum.Health), dist)
-                                    end
-
-                                    if healthFill then
-                                        healthFill.Size = UDim2.new(healthPct, 0, 1, 0)
-                                        if healthPct > 0.6 then
-                                            healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 130)
-                                        elseif healthPct > 0.3 then
-                                            healthFill.BackgroundColor3 = Color3.fromRGB(255, 190, 0)
-                                        else
-                                            healthFill.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+            GameTab:CreateToggle({
+                Name = "Enable Auto Fish",
+                CurrentValue = false,
+                Callback = function(val)
+                    flags.autofish = val
+                    if val then
+                        task.spawn(function()
+                            while flags.autofish do
+                                if equipRemote and rodRemote and miniGameRemote and finishRemote then
+                                    pcall(function()
+                                        equipRemote:FireServer(1)
+                                        task.wait(0.12)
+                                        local timestamp = flags.perfectCast and 9999999999 or tick()
+                                        rodRemote:InvokeServer(timestamp)
+                                        task.wait(0.12)
+                                        local x, y = -1.238, 0.969
+                                        if not flags.perfectCast then
+                                            x = math.random(-1000,1000)/1000
+                                            y = math.random(0,1000)/1000
                                         end
-                                    end
-
-                                    if stroke then
-                                        stroke.Color = isTeammate and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(255, 60, 60)
-                                    end
+                                        miniGameRemote:InvokeServer(x, y)
+                                        task.wait(1.3)
+                                        finishRemote:FireServer()
+                                    end)
+                                else
+                                    flags.autofish = false
+                                    break
+                                end
+                                for i=1,14 do
+                                    if not flags.autofish then break end
+                                    task.wait(0.1)
                                 end
                             end
-                        else
-                            if espTable[player].Billboard then
-                                espTable[player].Billboard:Destroy()
-                                espTable[player].Billboard = nil
-                            end
-                        end
-
-                        -- 2. Highlight Chams ESP (Glow through walls)
-                        if flags.highlightESP then
-                            if not espTable[player].Highlight or not espTable[player].Highlight.Parent then
-                                espTable[player].Highlight = createHighlight(char)
-                            end
-
-                            local hl = espTable[player].Highlight
-                            if hl then
-                                hl.Adornee = char
-                                hl.FillColor = isTeammate and Color3.fromRGB(0, 200, 255) or Color3.fromRGB(255, 50, 50)
-                            end
-                        else
-                            if espTable[player].Highlight then
-                                espTable[player].Highlight:Destroy()
-                                espTable[player].Highlight = nil
-                            end
-                        end
-                    else
-                        cleanupESP(player)
+                        end)
                     end
                 end
-            end
-        end
+            })
 
-        local function toggleESPState()
-            clearConn("playerESP_Loop")
-            if flags.playerESP or flags.highlightESP then
-                setConn("playerESP_Rem", Players.PlayerRemoving:Connect(cleanupESP))
-                setConn("playerESP_Loop", RunService.Heartbeat:Connect(updateESP))
-            else
-                clearConn("playerESP_Rem")
-                for player, _ in pairs(espTable) do
-                    cleanupESP(player)
-                end
-                espTable = {}
-            end
-        end
-        
-        ESPTab:CreateToggle({
-            Name = "Name & Health Bar ESP",
-            CurrentValue = false,
-            Callback = function(enabled)
-                flags.playerESP = enabled
-                toggleESPState()
-            end
-        })
+            GameTab:CreateToggle({
+                Name = "Use Perfect Cast",
+                CurrentValue = true,
+                Callback = function(v) flags.perfectCast = v end
+            })
 
-        ESPTab:CreateToggle({
-            Name = "Chams Glow ESP (Through Walls)",
-            CurrentValue = false,
-            Callback = function(enabled)
-                flags.highlightESP = enabled
-                toggleESPState()
+            local islandCoords = {
+                { name = "Weather Machine", position = Vector3.new(-1471, -3, 1929) },
+                { name = "Esoteric Depths", position = Vector3.new(3157, -1303, 1439) },
+                { name = "Tropical Grove", position = Vector3.new(-2038, 3, 3650) },
+                { name = "Stingray Shores", position = Vector3.new(-32, 4, 2773) },
+                { name = "Kohana Volcano", position = Vector3.new(-519, 24, 189) },
+                { name = "Coral Reefs", position = Vector3.new(-3095, 1, 2177) },
+                { name = "Crater Island", position = Vector3.new(968, 1, 4854) },
+                { name = "Kohana", position = Vector3.new(-658, 3, 719) },
+                { name = "Winter Fest", position = Vector3.new(1611, 4, 3280) },
+                { name = "Isoteric Island", position = Vector3.new(1987, 4, 1400) },
+                { name = "Treasure Hall", position = Vector3.new(-3600, -267, -1558) },
+                { name = "Lost Shore", position = Vector3.new(-3663, 38, -989) },
+            }
+            table.sort(islandCoords, function(a,b) return a.name < b.name end)
+            local islandNames, nameToPos = {}, {}
+            for _, info in ipairs(islandCoords) do
+                table.insert(islandNames, info.name)
+                nameToPos[info.name] = info.position
             end
-        })
-        
-        ESPTab:CreateButton({
-            Name = "Refresh ESP",
-            Callback = function()
-                for player, _ in pairs(espTable) do
-                    cleanupESP(player)
+
+            GameTab:CreateDropdown({
+                Name = "Pilih Island",
+                Options = islandNames,
+                CurrentOption = {},
+                MultipleOptions = false,
+                Flag = "FishItIslandDropdown",
+                Callback = function(option)
+                    local chosen = (typeof(option) == "table" and option[1]) or option
+                    if not chosen then return end
+                    local pos = nameToPos[chosen]
+                    if not pos then return end
+                    local hrp = getHRP()
+                    if hrp then
+                        hrp.CFrame = CFrame.new(pos + Vector3.new(0,5,0))
+                    end
                 end
-                espTable = {}
-            end
-        })
+            })
+        end
     end
-    -- === KODE PLAYER ESP BERAKHIR DI SINI ===
-
-
-    AddFishItTab()
-    
-    -- Panggil fitur ESP yang baru
-    AddESPTab(Window)
 end
 
 -- ===== Monitor PlaceId changes & reload UI =====
