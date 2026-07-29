@@ -1512,6 +1512,39 @@ local function CreateUI()
     })
 
     TeleportTab:CreateButton({
+        Name = "Server Hop (Pengguna Ramai / High Players)",
+        Callback = function()
+            task.spawn(function()
+                local placeId = game.PlaceId
+                local req = (syn and syn.request) or (http and http.request) or http_request or request
+                local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", placeId)
+                
+                local servers = {}
+                pcall(function()
+                    if req then
+                        local res = req({Url = url, Method = "GET"})
+                        if res and res.Body then
+                            local data = HttpService:JSONDecode(res.Body)
+                            if data and data.data then servers = data.data end
+                        end
+                    else
+                        local resData = game:HttpGet(url)
+                        local data = HttpService:JSONDecode(resData)
+                        if data and data.data then servers = data.data end
+                    end
+                end)
+
+                for _, server in ipairs(servers) do
+                    if server.id ~= game.JobId and server.playing < server.maxPlayers and server.playing > 0 then
+                        TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                        break
+                    end
+                end
+            end)
+        end
+    })
+
+    TeleportTab:CreateButton({
         Name = "Rejoin Current Server",
         Callback = function()
             pcall(function()
@@ -1911,11 +1944,202 @@ local function CreateUI()
     })
 
 
+    -- ===== MINE A MOUNTAIN NATIVE SUITE =====
+    local mamMinCrystalValue = 100000
+    local mamEspFolder = nil
+    local mamEspConns = {}
+
+    local function getCrystalAttr(inst, name)
+        local ok, val = pcall(inst.GetAttribute, inst, name)
+        return ok and val or nil
+    end
+
+    local function isCrystalInstance(inst)
+        if not inst:IsA("BasePart") then return false end
+        return getCrystalAttr(inst, "Value") ~= nil or inst.Name:find("Crystal") ~= nil
+    end
+
+    local function setMamAutoPickup(enabled)
+        flags.mamAutoPickup = enabled
+        if enabled then
+            task.spawn(function()
+                while flags.mamAutoPickup do
+                    pcall(function()
+                        local folder = ReplicatedStorage:FindFirstChild("Remotes")
+                        local holdRemote = folder and (folder:FindFirstChild("CrystalHoldComplete") or folder:FindFirstChild("HoldComplete"))
+                        for _, v in ipairs(Workspace:GetDescendants()) do
+                            if not flags.mamAutoPickup then break end
+                            if isCrystalInstance(v) then
+                                local val = tonumber(getCrystalAttr(v, "Value")) or 0
+                                if val >= mamMinCrystalValue then
+                                    if holdRemote then
+                                        holdRemote:FireServer(v)
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end
+
+    local function setMamAutoSell(enabled)
+        flags.mamAutoSell = enabled
+        if enabled then
+            task.spawn(function()
+                while flags.mamAutoSell do
+                    pcall(function()
+                        local folder = ReplicatedStorage:FindFirstChild("Remotes")
+                        local sellRemote = folder and (folder:FindFirstChild("SellRequest") or folder:FindFirstChild("Sell"))
+                        if sellRemote then
+                            sellRemote:FireServer()
+                        end
+                    end)
+                    task.wait(3)
+                end
+            end)
+        end
+    end
+
+    local function mamTeleportToBestCrystal()
+        local bestVal = -1
+        local bestPart = nil
+        local hrp = getHRP()
+        if not hrp then return end
+
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if isCrystalInstance(v) then
+                local val = tonumber(getCrystalAttr(v, "Value")) or 0
+                if val > bestVal then
+                    bestVal = val
+                    bestPart = v
+                end
+            end
+        end
+
+        if bestPart then
+            hrp.CFrame = bestPart.CFrame * CFrame.new(0, 4, 0)
+        end
+    end
+
+    local function setMamCrystalESP(enabled)
+        flags.mamCrystalESP = enabled
+        if mamEspFolder then pcall(function() mamEspFolder:Destroy() end) mamEspFolder = nil end
+        for _, c in ipairs(mamEspConns) do pcall(function() c:Disconnect() end) end
+        table.clear(mamEspConns)
+
+        if enabled then
+            local folder = Instance.new("Folder")
+            folder.Name = "BoyeszMamCrystalEsp"
+            folder.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+            mamEspFolder = folder
+
+            local function addEsp(v)
+                if not isCrystalInstance(v) or v:FindFirstChild("BoyeszMamEspGui") then return end
+                local val = tonumber(getCrystalAttr(v, "Value")) or 0
+                if val < mamMinCrystalValue then return end
+
+                local billboard = Instance.new("BillboardGui")
+                billboard.Name = "BoyeszMamEspGui"
+                billboard.Adornee = v
+                billboard.AlwaysOnTop = true
+                billboard.Size = UDim2.new(0, 140, 0, 40)
+                billboard.StudsOffset = Vector3.new(0, 3, 0)
+                billboard.Parent = folder
+
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextColor3 = Color3.fromRGB(0, 255, 200)
+                label.Font = Enum.Font.GothamBold
+                label.TextSize = 11
+                label.TextStrokeTransparency = 0
+                label.Text = string.format("💎 %s\n💰 $%s", v.Name, tostring(val))
+                label.Parent = billboard
+            end
+
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                addEsp(v)
+            end
+
+            table.insert(mamEspConns, Workspace.DescendantAdded:Connect(function(v)
+                if flags.mamCrystalESP then
+                    task.wait(0.1)
+                    addEsp(v)
+                end
+            end))
+        end
+    end
+
+
     -- 7. GAMES HUB TAB (Script Game Spesifik)
     local GameTab = Window:CreateTab("Games Hub", "gamepad-2")
     windows.GameScripts = GameTab
 
-    GameTab:CreateSection("Mine a Mountain v1 (Gumanba)")
+    GameTab:CreateSection("Mine a Mountain (Fitur Native Direct)")
+
+    GameTab:CreateToggle({
+        Name = "Auto Pickup / Instant Loot Crystals",
+        CurrentValue = false,
+        Callback = setMamAutoPickup
+    })
+
+    GameTab:CreateToggle({
+        Name = "Auto Sell Crystals",
+        CurrentValue = false,
+        Callback = setMamAutoSell
+    })
+
+    GameTab:CreateButton({
+        Name = "Sell All Crystals Now",
+        Callback = function()
+            pcall(function()
+                local folder = ReplicatedStorage:FindFirstChild("Remotes")
+                local sellRemote = folder and (folder:FindFirstChild("SellRequest") or folder:FindFirstChild("Sell"))
+                if sellRemote then sellRemote:FireServer() end
+            end)
+        end
+    })
+
+    GameTab:CreateButton({
+        Name = "Teleport to Base (Go Home)",
+        Callback = function()
+            pcall(function()
+                local folder = ReplicatedStorage:FindFirstChild("Remotes")
+                local homeRemote = folder and (folder:FindFirstChild("GoHome") or folder:FindFirstChild("Home"))
+                if homeRemote then homeRemote:FireServer() end
+            end)
+        end
+    })
+
+    GameTab:CreateButton({
+        Name = "⚡ Teleport to Highest Value Crystal",
+        Callback = mamTeleportToBestCrystal
+    })
+
+    GameTab:CreateToggle({
+        Name = "Crystal ESP System",
+        CurrentValue = false,
+        Callback = setMamCrystalESP
+    })
+
+    GameTab:CreateSlider({
+        Name = "Min Crystal Value Filter",
+        Range = {0, 10000000},
+        Increment = 100000,
+        Suffix = "$",
+        CurrentValue = 100000,
+        Callback = function(val)
+            mamMinCrystalValue = val
+            if flags.mamCrystalESP then
+                setMamCrystalESP(true)
+            end
+        end
+    })
+
+    GameTab:CreateSection("Mine a Mountain (External Script Execute)")
 
     GameTab:CreateToggle({
         Name = "Mine a Mountain v1 (Auto-Execute)",
@@ -1936,7 +2160,7 @@ local function CreateUI()
     })
 
     GameTab:CreateButton({
-        Name = "Execute Mine a Mountain v1",
+        Name = "Execute Mine a Mountain v1 (Gumanba)",
         Callback = function()
             task.spawn(function()
                 local ok, err = pcall(function()
@@ -1949,33 +2173,36 @@ local function CreateUI()
         end
     })
 
-    GameTab:CreateSection("Mine a Mountain v2")
-
-    local function runMineAMountainV2()
-        task.spawn(function()
-            local ok, err = pcall(function()
-                loadstring(game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%20a%20Mountain%20by%20DonnieAzoff"))()
-            end)
-            if not ok then
-                warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
-            end
-        end)
-    end
-
     GameTab:CreateToggle({
         Name = "Mine a Mountain v2 (Auto-Execute)",
         CurrentValue = false,
         Callback = function(enabled)
             flags.mineAMountainV2 = enabled
             if enabled then
-                runMineAMountainV2()
+                task.spawn(function()
+                    local ok, err = pcall(function()
+                        loadstring(game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%20a%20Mountain%20by%20DonnieAzoff"))()
+                    end)
+                    if not ok then
+                        warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
+                    end
+                end)
             end
         end
     })
 
     GameTab:CreateButton({
-        Name = "Execute Mine a Mountain v2",
-        Callback = runMineAMountainV2
+        Name = "Execute Mine a Mountain v2 (DonnieAzoff Gist)",
+        Callback = function()
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    loadstring(game:HttpGet("https://gist.githubusercontent.com/2RanmaChan2/d85484e7ff26eadee63e20f9069d8581/raw/1185a00d955831be354d47d6d8a79349288ba59f/Mine%20a%20Mountain%20by%20DonnieAzoff"))()
+                end)
+                if not ok then
+                    warn("[Boyesz Tonz] Error executing Mine a Mountain v2:", err)
+                end
+            end)
+        end
     })
 
     if game.PlaceId == 121864768012064 then
