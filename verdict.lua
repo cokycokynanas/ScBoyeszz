@@ -385,7 +385,8 @@ local function setAntiSlap(enabled)
     flags.antiSlap = enabled
     clearConn("antiSlapHeartbeat")
     if enabled then
-        setConn("antiSlapHeartbeat", RunService.Heartbeat:Connect(function()
+        local physicsStep = RunService.PreSimulation or RunService.Heartbeat
+        setConn("antiSlapHeartbeat", physicsStep:Connect(function()
             if not flags.antiSlap then return end
 
             local char = getCharacter()
@@ -394,22 +395,22 @@ local function setAntiSlap(enabled)
             if not char or not hum or not hrp or hum.Health <= 0 then return end
 
             local velocity = hrp.AssemblyLinearVelocity
-            local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-            if horizontalVelocity.Magnitude > 60 then
-                local moveDirection = hum.MoveDirection
-                local targetVelocity = moveDirection.Magnitude > 0
-                    and moveDirection.Unit * hum.WalkSpeed
-                    or Vector3.zero
-                hrp.AssemblyLinearVelocity = Vector3.new(
-                    targetVelocity.X,
-                    math.clamp(velocity.Y, -60, 60),
-                    targetVelocity.Z
-                )
-            end
+            local moveDirection = hum.MoveDirection
+            local targetVelocity = moveDirection.Magnitude > 0
+                and moveDirection.Unit * hum.WalkSpeed
+                or Vector3.zero
+            local state = hum:GetState()
+            local airborne = state == Enum.HumanoidStateType.Jumping
+                or state == Enum.HumanoidStateType.Freefall
+                or state == Enum.HumanoidStateType.FallingDown
+            local verticalVelocity = airborne and math.clamp(velocity.Y, -50, 50) or 0
 
-            if hrp.AssemblyAngularVelocity.Magnitude > 5 then
-                hrp.AssemblyAngularVelocity = Vector3.zero
-            end
+            hrp.AssemblyLinearVelocity = Vector3.new(
+                targetVelocity.X,
+                verticalVelocity,
+                targetVelocity.Z
+            )
+            hrp.AssemblyAngularVelocity = Vector3.zero
         end))
     end
 end
