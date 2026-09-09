@@ -380,6 +380,40 @@ local function setAntiStun(enabled)
     end
 end
 
+-- Anti-Slap Function
+local function setAntiSlap(enabled)
+    flags.antiSlap = enabled
+    clearConn("antiSlapHeartbeat")
+    if enabled then
+        setConn("antiSlapHeartbeat", RunService.Heartbeat:Connect(function()
+            if not flags.antiSlap then return end
+
+            local char = getCharacter()
+            local hum = getHumanoid()
+            local hrp = getHRP()
+            if not char or not hum or not hrp or hum.Health <= 0 then return end
+
+            local velocity = hrp.AssemblyLinearVelocity
+            local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+            if horizontalVelocity.Magnitude > 60 then
+                local moveDirection = hum.MoveDirection
+                local targetVelocity = moveDirection.Magnitude > 0
+                    and moveDirection.Unit * hum.WalkSpeed
+                    or Vector3.zero
+                hrp.AssemblyLinearVelocity = Vector3.new(
+                    targetVelocity.X,
+                    math.clamp(velocity.Y, -60, 60),
+                    targetVelocity.Z
+                )
+            end
+
+            if hrp.AssemblyAngularVelocity.Magnitude > 5 then
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end
+        end))
+    end
+end
+
 -- FPS & Ping HUD Overlay Function
 local fpsPingGui = nil
 local function setFpsPingHUD(enabled)
@@ -883,6 +917,12 @@ local function CreateUI()
         Name = "Anti-Fling Protection",
         CurrentValue = false,
         Callback = setAntiFling
+    })
+
+    Main:CreateToggle({
+        Name = "Anti-Slap Protection",
+        CurrentValue = false,
+        Callback = setAntiSlap
     })
 
     Main:CreateToggle({
