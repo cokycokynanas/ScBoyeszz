@@ -24,6 +24,320 @@ local originalLighting = {}
 local customSpeed = 16
 local originalGravity = Workspace.Gravity or 196.2 -- Simpan gravitasi asli
 
+-- UI Controls & Config Database state
+local UIControls = {
+    Toggles = {},
+    Sliders = {},
+    Dropdowns = {}
+}
+local savedSlots = {}
+for i = 1, 30 do savedSlots[i] = nil end
+local quickSavedCFrames = {}
+local floatingTPWidgets = {}
+local createFloatingTPWidget = nil
+
+-- Helpers for Notifications
+local function sendNotification(title, text, duration)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title or "⚡ Boyesz Tonz",
+            Text = text or "",
+            Duration = duration or 3
+        })
+    end)
+end
+
+-- Serialization helpers for Vector3 & CFrame (Roblox userdata cannot be directly JSON encoded)
+local function serializeVector3(v)
+    if typeof(v) == "Vector3" then
+        return { x = v.X, y = v.Y, z = v.Z }
+    end
+    return nil
+end
+
+local function deserializeVector3(t)
+    if type(t) == "table" and t.x and t.y and t.z then
+        return Vector3.new(t.x, t.y, t.z)
+    end
+    return nil
+end
+
+local function serializeCFrame(cf)
+    if typeof(cf) == "CFrame" then
+        return { cf:GetComponents() }
+    end
+    return nil
+end
+
+local function deserializeCFrame(t)
+    if type(t) == "table" and #t == 12 then
+        return CFrame.new(unpack(t))
+    end
+    return nil
+end
+
+-- Config Database Manager
+local ConfigManager = {
+    Folder = "BoyeszTonz_Config",
+    AutoLoadFile = "BoyeszTonz_Config/autoload.txt"
+}
+local inMemoryConfigs = {}
+local hasFileSystem = (writefile and readfile and isfile and isfolder and makefolder) and true or false
+
+function ConfigManager:EnsureFolder()
+    if hasFileSystem and not isfolder(self.Folder) then
+        pcall(function() makefolder(self.Folder) end)
+    end
+end
+
+function ConfigManager:GetConfigs()
+    local list = {}
+    if hasFileSystem and listfiles then
+        pcall(function()
+            self:EnsureFolder()
+            local files = listfiles(self.Folder)
+            for _, path in ipairs(files) do
+                local clean = path:gsub("\\", "/")
+                local name = clean:match("([^/]+)%.json$")
+                if name then
+                    table.insert(list, name)
+                end
+            end
+        end)
+    else
+        for name, _ in pairs(inMemoryConfigs) do
+            table.insert(list, name)
+        end
+    end
+    if #list == 0 then
+        table.insert(list, "default")
+    end
+    table.sort(list)
+    return list
+end
+
+function ConfigManager:GetAutoLoadConfig()
+    if hasFileSystem and isfile(self.AutoLoadFile) then
+        local ok, content = pcall(readfile, self.AutoLoadFile)
+        if ok and content and content ~= "" then
+            return content:gsub("%s+", "")
+        end
+    end
+    return nil
+end
+
+function ConfigManager:SetAutoLoad(enabled, configName)
+    self:EnsureFolder()
+    if hasFileSystem then
+        if enabled and configName and configName ~= "" then
+            pcall(writefile, self.AutoLoadFile, tostring(configName))
+        else
+            if isfile(self.AutoLoadFile) then
+                pcall(function()
+                    if delfile then
+                        delfile(self.AutoLoadFile)
+                    else
+                        writefile(self.AutoLoadFile, "")
+                    end
+                end)
+            end
+        end
+    end
+end
+
+function ConfigManager:Save(configName)
+    configName = (configName and configName ~= "") and configName or "default"
+    self:EnsureFolder()
+
+    local data = {
+        meta = {
+            name = configName,
+            version = "2.0",
+            placeId = game.PlaceId,
+            time = os.date and os.date("%Y-%m-%d %H:%M:%S") or "N/A"
+        },
+        toggles = {},
+        sliders = {},
+        teleport = {
+            savedSlots = {},
+            quickTP = {}
+        }
+    }
+
+    -- 1. Save UI Toggles
+    for name, toggleObj in pairs(UIControls.Toggles) do
+        if toggleObj and toggleObj.CurrentValue ~= nil then
+            data.toggles[name] = toggleObj.CurrentValue
+        end
+    end
+
+    -- 2. Save UI Sliders
+    for name, sliderObj in pairs(UIControls.Sliders) do
+        if sliderObj and sliderObj.CurrentValue ~= nil then
+            data.sliders[name] = sliderObj.CurrentValue
+        end
+    end
+
+    -- 3. Save Teleport Positions (Slots 1 - 30)
+    for i = 1, 30 do
+        if savedSlots[i] then
+            data.teleport.savedSlots[tostring(i)] = serializeVector3(savedSlots[i])
+        end
+    end
+
+    -- 4. Save Quick Floating TP (Slots 1 - 10)
+    for i = 1, 10 do
+        local isOpen = (floatingTPWidgets[i] ~= nil)
+        local cfData = quickSavedCFrames[i] and serializeCFrame(quickSavedCFrames[i]) or nil
+        if isOpen or cfData then
+            data.teleport.quickTP[tostring(i)] = {
+                isOpen = isOpen,
+                cframe = cfData
+            }
+        end
+    end
+
+    local jsonStr = HttpService:JSONEncode(data)
+    if hasFileSystem then
+        local filePath = self.Folder .. "/" .. configName .. ".json"
+        local ok, err = pcall(writefile, filePath, jsonStr)
+        if not ok then
+            warn("[Boyesz Tonz Config] Writefile failed: " .. tostring(err))
+            sendNotification("❌ Error Save", "Gagal menyimpan file ke executor!", 3)
+            return false, "Gagal menulis file: " .. tostring(err)
+        end
+    else
+        inMemoryConfigs[configName] = jsonStr
+    end
+
+    sendNotification("💾 Config Tersimpan", "Config '" .. configName .. "' berhasil disimpan!", 3)
+    return true, "Config berhasil disimpan!"
+end
+
+function ConfigManager:Load(configName)
+    configName = (configName and configName ~= "") and configName or "default"
+    local jsonStr = nil
+
+    if hasFileSystem then
+        local filePath = self.Folder .. "/" .. configName .. ".json"
+        if not isfile(filePath) then
+            sendNotification("❌ Config Error", "Config '" .. configName .. "' tidak ditemukan!", 3)
+            return false, "Config tidak ditemukan!"
+        end
+        local ok, res = pcall(readfile, filePath)
+        if not ok or not res then
+            sendNotification("❌ Config Error", "Gagal membaca file config!", 3)
+            return false, "Gagal membaca file!"
+        end
+        jsonStr = res
+    else
+        jsonStr = inMemoryConfigs[configName]
+        if not jsonStr then
+            sendNotification("❌ Config Error", "Config '" .. configName .. "' tidak ada di memory!", 3)
+            return false, "Config tidak ditemukan!"
+        end
+    end
+
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(jsonStr)
+    end)
+
+    if not ok or type(data) ~= "table" then
+        sendNotification("❌ Config Error", "Format data JSON rusak!", 3)
+        return false, "Format JSON rusak!"
+    end
+
+    -- 1. Restore Teleport Position Slots (1 - 30)
+    if data.teleport and data.teleport.savedSlots then
+        for i = 1, 30 do
+            local posData = data.teleport.savedSlots[tostring(i)]
+            if posData then
+                savedSlots[i] = deserializeVector3(posData)
+            else
+                savedSlots[i] = nil
+            end
+        end
+    end
+
+    -- 2. Restore Quick Floating TP (1 - 10)
+    if data.teleport and data.teleport.quickTP then
+        for i = 1, 10 do
+            local tpData = data.teleport.quickTP[tostring(i)]
+            if tpData then
+                if tpData.cframe then
+                    quickSavedCFrames[i] = deserializeCFrame(tpData.cframe)
+                end
+                if tpData.isOpen then
+                    if UIControls.Toggles["WidgetSlot_" .. i] then
+                        pcall(function() UIControls.Toggles["WidgetSlot_" .. i]:Set(true) end)
+                    elseif createFloatingTPWidget then
+                        createFloatingTPWidget(i)
+                    end
+                else
+                    if UIControls.Toggles["WidgetSlot_" .. i] then
+                        pcall(function() UIControls.Toggles["WidgetSlot_" .. i]:Set(false) end)
+                    elseif floatingTPWidgets[i] then
+                        floatingTPWidgets[i]:Destroy()
+                        floatingTPWidgets[i] = nil
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. Restore Sliders
+    if data.sliders then
+        for name, val in pairs(data.sliders) do
+            local sliderObj = UIControls.Sliders[name]
+            if sliderObj and sliderObj.Set then
+                pcall(function() sliderObj:Set(val) end)
+            end
+        end
+    end
+
+    -- 4. Restore Toggles (This triggers callbacks and turns on features!)
+    if data.toggles then
+        for name, val in pairs(data.toggles) do
+            local toggleObj = UIControls.Toggles[name]
+            if toggleObj and toggleObj.Set then
+                pcall(function() toggleObj:Set(val) end)
+            end
+        end
+    end
+
+    sendNotification("📂 Config Dimuat", "Config '" .. configName .. "' dimuat & fitur diaktifkan!", 3)
+    return true, "Config berhasil dimuat!"
+end
+
+function ConfigManager:Delete(configName)
+    configName = (configName and configName ~= "") and configName or "default"
+    if hasFileSystem then
+        local filePath = self.Folder .. "/" .. configName .. ".json"
+        if isfile(filePath) then
+            pcall(function()
+                if delfile then delfile(filePath) else writefile(filePath, "") end
+            end)
+            sendNotification("🗑 Config Dihapus", "File '" .. configName .. "' telah dihapus!", 3)
+            return true
+        end
+    else
+        inMemoryConfigs[configName] = nil
+        sendNotification("🗑 Config Dihapus", "Config '" .. configName .. "' dihapus dari memory!", 3)
+        return true
+    end
+    sendNotification("❌ Config Error", "Config '" .. configName .. "' tidak ditemukan!", 3)
+    return false
+end
+
+function ConfigManager:CheckAutoLoad()
+    local target = self:GetAutoLoadConfig()
+    if target and target ~= "" then
+        print("[Boyesz Tonz Config] Auto-loading config: " .. target)
+        task.wait(0.5)
+        self:Load(target)
+    end
+end
+
 -- Aimbot/Killaura state
 local aimbotTarget = nil
 local selectedAimbotPlayerName = nil -- NEW: Nama pemain yang dipilih untuk Aimbot
@@ -780,7 +1094,7 @@ local function CreateUI()
 
     Main:CreateSection("Karakter & Fisik")
 
-    Main:CreateToggle({
+    UIControls.Toggles["GodMode"] = Main:CreateToggle({
         Name = "God Mode",
         CurrentValue = false,
         Callback = function(enabled)
@@ -797,13 +1111,13 @@ local function CreateUI()
         end
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["GhostMode"] = Main:CreateToggle({
         Name = "Ghost Mode",
         CurrentValue = false,
         Callback = setGhostMode
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["Noclip"] = Main:CreateToggle({
         Name = "Noclip",
         CurrentValue = false,
         Callback = function(enabled)
@@ -832,7 +1146,7 @@ local function CreateUI()
         end
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["SpeedHack"] = Main:CreateToggle({
         Name = "Speed Hack (WalkSpeed)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -844,7 +1158,7 @@ local function CreateUI()
         end
     })
 
-    Main:CreateSlider({
+    UIControls.Sliders["SpeedValue"] = Main:CreateSlider({
         Name = "Speed Value",
         Range = {16, 200},
         Increment = 1,
@@ -880,13 +1194,13 @@ local function CreateUI()
         end
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["BypassSpeed"] = Main:CreateToggle({
         Name = "Bypass Speed Hack (Anti-Detect)",
         CurrentValue = false,
         Callback = setBypassSpeed
     })
 
-    Main:CreateSlider({
+    UIControls.Sliders["BypassSpeedMultiplier"] = Main:CreateSlider({
         Name = "Bypass Speed Multiplier",
         Range = {1.2, 10},
         Increment = 0.2,
@@ -897,7 +1211,7 @@ local function CreateUI()
         end
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["InfiniteJump"] = Main:CreateToggle({
         Name = "Infinite Jump",
         CurrentValue = false,
         Callback = function(enabled)
@@ -914,19 +1228,19 @@ local function CreateUI()
 
     Main:CreateSection("Proteksi Karakter")
 
-    Main:CreateToggle({
+    UIControls.Toggles["AntiFling"] = Main:CreateToggle({
         Name = "Anti-Fling Protection",
         CurrentValue = false,
         Callback = setAntiFling
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["AntiSlap"] = Main:CreateToggle({
         Name = "Anti-Slap Protection",
         CurrentValue = false,
         Callback = setAntiSlap
     })
 
-    Main:CreateToggle({
+    UIControls.Toggles["AntiStun"] = Main:CreateToggle({
         Name = "Anti-Stun / Anti-Ragdoll",
         CurrentValue = false,
         Callback = setAntiStun
@@ -979,7 +1293,7 @@ local function CreateUI()
         pcall(function() AimbotPlayerDropdown:Refresh(getAimbotPlayerOptions(), true) end)
     end))
 
-    CombatTab:CreateToggle({
+    UIControls.Toggles["AimbotLock"] = CombatTab:CreateToggle({
         Name = "Aimbot Lock",
         CurrentValue = false,
         Callback = function(enabled)
@@ -994,7 +1308,7 @@ local function CreateUI()
 
     CombatTab:CreateSection("Hitbox Expander")
 
-    CombatTab:CreateSlider({
+    UIControls.Sliders["HitboxMultiplier"] = CombatTab:CreateSlider({
         Name = "Multiplier Value",
         Range = {1, 10},
         Increment = 0.5,
@@ -1008,7 +1322,7 @@ local function CreateUI()
         end
     })
 
-    CombatTab:CreateToggle({
+    UIControls.Toggles["HitboxExpander"] = CombatTab:CreateToggle({
         Name = "Enable Hitbox",
         CurrentValue = false,
         Callback = setHitbox
@@ -1016,7 +1330,7 @@ local function CreateUI()
 
     CombatTab:CreateSection("Kill Aura")
 
-    CombatTab:CreateToggle({
+    UIControls.Toggles["KillAura"] = CombatTab:CreateToggle({
         Name = "Kill Aura",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1033,7 +1347,7 @@ local function CreateUI()
         end
     })
 
-    CombatTab:CreateSlider({
+    UIControls.Sliders["KillAuraDelay"] = CombatTab:CreateSlider({
         Name = "Kill Aura Delay",
         Range = {0.1, 5},
         Increment = 0.1,
@@ -1055,7 +1369,7 @@ local function CreateUI()
     local CFloop
     local cflySpeed = 50
 
-    MovementTab:CreateToggle({
+    UIControls.Toggles["CFly"] = MovementTab:CreateToggle({
         Name = "CFly",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1097,7 +1411,7 @@ local function CreateUI()
         end
     })
 
-    MovementTab:CreateSlider({
+    UIControls.Sliders["CFlySpeed"] = MovementTab:CreateSlider({
         Name = "CFly Speed",
         Range = {10, 300},
         Increment = 5,
@@ -1108,7 +1422,7 @@ local function CreateUI()
         end
     })
 
-    MovementTab:CreateToggle({
+    UIControls.Toggles["ExternalFly"] = MovementTab:CreateToggle({
         Name = "Fly Script (Auto-Execute)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1142,19 +1456,19 @@ local function CreateUI()
 
     MovementTab:CreateSection("Pijakan & Pergerakan Khusus")
 
-    MovementTab:CreateToggle({
+    UIControls.Toggles["Shiftlock"] = MovementTab:CreateToggle({
         Name = "Universal Shiftlock Switch (Mobile & PC)",
         CurrentValue = false,
         Callback = setShiftlock
     })
 
-    MovementTab:CreateToggle({
+    UIControls.Toggles["AirWalk"] = MovementTab:CreateToggle({
         Name = "Air Walk / Invisible Platform",
         CurrentValue = false,
         Callback = setAirWalk
     })
 
-    MovementTab:CreateToggle({
+    UIControls.Toggles["ClickTeleport"] = MovementTab:CreateToggle({
         Name = "Click Teleport",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1179,13 +1493,13 @@ local function CreateUI()
 
     VisualsTab:CreateSection("HUD & Overlay")
 
-    VisualsTab:CreateToggle({
+    UIControls.Toggles["FpsPingHUD"] = VisualsTab:CreateToggle({
         Name = "FPS & Ping Display HUD",
         CurrentValue = false,
         Callback = setFpsPingHUD
     })
 
-    VisualsTab:CreateToggle({
+    UIControls.Toggles["CustomCrosshair"] = VisualsTab:CreateToggle({
         Name = "Custom Crosshair",
         CurrentValue = false,
         Callback = setCustomCrosshair
@@ -1380,7 +1694,7 @@ local function CreateUI()
         end
     end
 
-    VisualsTab:CreateToggle({
+    UIControls.Toggles["PlayerESP"] = VisualsTab:CreateToggle({
         Name = "Name & Health Bar ESP",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1391,7 +1705,7 @@ local function CreateUI()
         end
     })
 
-    VisualsTab:CreateToggle({
+    UIControls.Toggles["HighlightESP"] = VisualsTab:CreateToggle({
         Name = "Chams Glow ESP (Through Walls)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1484,7 +1798,7 @@ local function CreateUI()
         end
     })
 
-    VisualsTab:CreateToggle({
+    UIControls.Toggles["FullBright"] = VisualsTab:CreateToggle({
         Name = "Fullbright",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1647,7 +1961,6 @@ local function CreateUI()
     })
 
     TeleportTab:CreateSection("Save Position Slots (1 - 30)")
-    local savedSlots = { nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil}
     local slotSelected = 1
 
     local SlotDropdown = TeleportTab:CreateDropdown({
@@ -1683,11 +1996,9 @@ local function CreateUI()
 
     TeleportTab:CreateSection("Quick Floating Teleports (Slots 1 - 10)")
 
-    local floatingTPWidgets = {}
-    local quickSavedCFrames = {}
     local selectedWidgetSlot = 1
 
-    local function createFloatingTPWidget(slotId)
+    createFloatingTPWidget = function(slotId)
         slotId = tonumber(slotId) or 1
         if floatingTPWidgets[slotId] then
             floatingTPWidgets[slotId]:Destroy()
@@ -1754,6 +2065,9 @@ local function CreateUI()
                 floatingTPWidgets[slotId]:Destroy()
                 floatingTPWidgets[slotId] = nil
             end
+            if UIControls.Toggles["WidgetSlot_" .. slotId] and UIControls.Toggles["WidgetSlot_" .. slotId].CurrentValue == true then
+                UIControls.Toggles["WidgetSlot_" .. slotId]:Set(false)
+            end
         end)
 
         local saveBtn = Instance.new("TextButton")
@@ -1812,44 +2126,66 @@ local function CreateUI()
         floatingTPWidgets[slotId] = gui
     end
 
-    local WidgetSlotDropdown = TeleportTab:CreateDropdown({
-        Name = "Pilih Slot Widget (1 - 10)",
-        Options = {"Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10"},
-        CurrentOption = {"Slot 1"},
-        MultipleOptions = false,
-        Flag = "WidgetSlotDropdown",
-        Callback = function(opt)
-            local chosen = (typeof(opt) == "table" and opt[1]) or opt
-            local num = tonumber(string.match(tostring(chosen), "%d+")) or 1
-            selectedWidgetSlot = num
-        end
-    })
-
     TeleportTab:CreateButton({
-        Name = "Buka Widget (Slot Terpilih)",
-        Callback = function()
-            createFloatingTPWidget(selectedWidgetSlot)
-        end
-    })
-
-    TeleportTab:CreateButton({
-        Name = "Buka Semua Widget (1 - 10)",
+        Name = "⚡ Buka Semua Widget (1 - 10)",
         Callback = function()
             for i = 1, 10 do
-                createFloatingTPWidget(i)
+                if UIControls.Toggles["WidgetSlot_" .. i] then
+                    UIControls.Toggles["WidgetSlot_" .. i]:Set(true)
+                else
+                    createFloatingTPWidget(i)
+                end
             end
         end
     })
 
     TeleportTab:CreateButton({
-        Name = "Tutup Semua Floating Widget",
+        Name = "❌ Tutup Semua Floating Widget",
         Callback = function()
             for i = 1, 10 do
-                if floatingTPWidgets[i] then
+                if UIControls.Toggles["WidgetSlot_" .. i] then
+                    UIControls.Toggles["WidgetSlot_" .. i]:Set(false)
+                elseif floatingTPWidgets[i] then
                     floatingTPWidgets[i]:Destroy()
                     floatingTPWidgets[i] = nil
                 end
             end
+        end
+    })
+
+    TeleportTab:CreateSection("Tombol ON / OFF Widget 1 - 10")
+
+    for i = 1, 10 do
+        local slot = i
+        UIControls.Toggles["WidgetSlot_" .. slot] = TeleportTab:CreateToggle({
+            Name = string.format("Teleport Widget Slot %d", slot),
+            CurrentValue = false,
+            Callback = function(enabled)
+                if enabled then
+                    createFloatingTPWidget(slot)
+                else
+                    if floatingTPWidgets[slot] then
+                        floatingTPWidgets[slot]:Destroy()
+                        floatingTPWidgets[slot] = nil
+                    end
+                end
+            end
+        })
+    end
+
+    TeleportTab:CreateSection("Quick Config Teleport")
+
+    TeleportTab:CreateButton({
+        Name = "💾 Simpan Posisi Teleport & Status Widget",
+        Callback = function()
+            ConfigManager:Save("teleport_quick_config")
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "📂 Muat Posisi Teleport & Buka Widget Otomatis",
+        Callback = function()
+            ConfigManager:Load("teleport_quick_config")
         end
     })
 
@@ -1870,7 +2206,7 @@ local function CreateUI()
     })
 
     local originalGlobalShadows = Lighting.GlobalShadows
-    PerformanceTab:CreateToggle({
+    UIControls.Toggles["FPSBoost"] = PerformanceTab:CreateToggle({
         Name = "FPS Boost (Standard Anti-Lag)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1947,7 +2283,7 @@ local function CreateUI()
 
     PerformanceTab:CreateSection("Protection")
 
-    PerformanceTab:CreateToggle({
+    UIControls.Toggles["AntiAFK"] = PerformanceTab:CreateToggle({
         Name = "Anti-AFK Protection (Auto 20m Kick Guard)",
         CurrentValue = true,
         Callback = function(enabled)
@@ -1965,7 +2301,7 @@ local function CreateUI()
         end
     })
 
-    PerformanceTab:CreateToggle({
+    UIControls.Toggles["AutoRejoin"] = PerformanceTab:CreateToggle({
         Name = "Auto Rejoin on Disconnect",
         CurrentValue = false,
         Callback = function(enabled)
@@ -1991,7 +2327,7 @@ local function CreateUI()
 
     GameTab:CreateSection("Mine a Mountain")
 
-    GameTab:CreateToggle({
+    UIControls.Toggles["MineAMountainV1"] = GameTab:CreateToggle({
         Name = "Mine a Mountain v1 (Auto-Execute)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -2023,7 +2359,7 @@ local function CreateUI()
         end
     })
 
-    GameTab:CreateToggle({
+    UIControls.Toggles["MineAMountainV2"] = GameTab:CreateToggle({
         Name = "Mine a Mountain v2 (Auto-Execute)",
         CurrentValue = false,
         Callback = function(enabled)
@@ -2072,7 +2408,7 @@ local function CreateUI()
             local miniGameRemote = netRoot:FindFirstChild("RF/RequestFishingMinigameStarted")
             local finishRemote = netRoot:FindFirstChild("RE/FishingCompleted")
 
-            GameTab:CreateToggle({
+            UIControls.Toggles["AutoFish"] = GameTab:CreateToggle({
                 Name = "Enable Auto Fish",
                 CurrentValue = false,
                 Callback = function(val)
@@ -2110,7 +2446,7 @@ local function CreateUI()
                 end
             })
 
-            GameTab:CreateToggle({
+            UIControls.Toggles["PerfectCast"] = GameTab:CreateToggle({
                 Name = "Use Perfect Cast",
                 CurrentValue = true,
                 Callback = function(v) flags.perfectCast = v end
@@ -2156,6 +2492,107 @@ local function CreateUI()
             })
         end
     end
+
+    -- 8. CONFIG & DATABASE TAB
+    local ConfigTab = Window:CreateTab("Config & Database", "save")
+    windows.Config = ConfigTab
+
+    ConfigTab:CreateSection("Database & Profile Konfigurasi")
+
+    local currentConfigName = "default"
+    local ConfigDropdown = nil
+
+    local function refreshConfigList()
+        local list = ConfigManager:GetConfigs()
+        if ConfigDropdown then
+            pcall(function() ConfigDropdown:Refresh(list, true) end)
+        end
+        return list
+    end
+
+    ConfigTab:CreateInput({
+        Name = "Nama Config",
+        PlaceholderText = "Contoh: default / farming / pvp",
+        RemoveTextAfterFocusLost = false,
+        Callback = function(text)
+            if text and text ~= "" then
+                currentConfigName = text:gsub("[%s/\\]+", "_")
+            end
+        end
+    })
+
+    ConfigDropdown = ConfigTab:CreateDropdown({
+        Name = "Pilih Config Tersimpan",
+        Options = ConfigManager:GetConfigs(),
+        CurrentOption = {ConfigManager:GetConfigs()[1] or "default"},
+        MultipleOptions = false,
+        Flag = "ConfigSelectedDropdown",
+        Callback = function(option)
+            local chosen = (typeof(option) == "table" and option[1]) or option
+            if chosen and chosen ~= "" then
+                currentConfigName = chosen
+            end
+        end
+    })
+
+    ConfigTab:CreateButton({
+        Name = "💾 Simpan Config (Save Config)",
+        Callback = function()
+            ConfigManager:Save(currentConfigName)
+            refreshConfigList()
+        end
+    })
+
+    ConfigTab:CreateButton({
+        Name = "📂 Muat Config (Load Config)",
+        Callback = function()
+            ConfigManager:Load(currentConfigName)
+        end
+    })
+
+    ConfigTab:CreateButton({
+        Name = "🔄 Refresh Daftar File Config",
+        Callback = function()
+            refreshConfigList()
+            sendNotification("Config List", "Daftar file config diperbarui!", 2)
+        end
+    })
+
+    ConfigTab:CreateButton({
+        Name = "🗑 Hapus Config (Delete Config)",
+        Callback = function()
+            ConfigManager:Delete(currentConfigName)
+            refreshConfigList()
+        end
+    })
+
+    ConfigTab:CreateSection("Auto-Load on Startup")
+
+    local isAutoLoad = (ConfigManager:GetAutoLoadConfig() ~= nil)
+    ConfigTab:CreateToggle({
+        Name = "⚡ Auto-Load saat Script Di-Execute",
+        CurrentValue = isAutoLoad,
+        Callback = function(enabled)
+            ConfigManager:SetAutoLoad(enabled, currentConfigName)
+            if enabled then
+                sendNotification("⚡ Auto-Load Aktif", "Config '" .. currentConfigName .. "' akan otomatis aktif saat execute!", 3)
+            else
+                sendNotification("⚡ Auto-Load Nonaktif", "Auto-load dinonaktifkan.", 3)
+            end
+        end
+    })
+
+    ConfigTab:CreateSection("Panduan Database & Backup")
+    ConfigTab:CreateParagraph({
+        Title = "Info Penyimpanan",
+        Content = "File config disimpan di folder: 'BoyeszTonz_Config/' dalam format JSON.\nMenyimpan status toggle fitur, slider, 30 slot teleport, dan floating teleport widget yang sedang aktif."
+    })
+
+    -- Auto-load check on initial startup
+    task.spawn(function()
+        task.wait(0.6)
+        ConfigManager:CheckAutoLoad()
+    end)
 end
 
 -- ===== Monitor PlaceId changes & reload UI =====
