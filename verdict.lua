@@ -2246,7 +2246,55 @@ local function CreateUI()
 
     flags.playerESP = false
     flags.highlightESP = false
+    flags.boxESP2D = false
+    flags.tracersESP = false
+    flags.distanceESP = true
+    flags.itemESP = false
+    flags.filterTools = true
+    flags.filterChests = true
+    flags.filterDrops = true
+
     local espTable = {}
+    local itemESPTable = {}
+    local espMaxDistance = 1500
+    local itemEspMaxDistance = 600
+    local tracerColorMode = "Rainbow"
+    local espOverlayGui = nil
+
+    local function getESPOverlayGui()
+        if not espOverlayGui or not espOverlayGui.Parent then
+            local parent = (gethui and gethui()) or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            if not parent then return nil end
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "BoyeszESP_OverlayGui"
+            gui.ResetOnSpawn = false
+            gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            gui.DisplayOrder = 100
+            gui.Parent = parent
+            espOverlayGui = gui
+        end
+        return espOverlayGui
+    end
+
+    local function getESPColor(plr, index)
+        if tracerColorMode == "Rainbow" then
+            return Color3.fromHSV((tick() * 0.35 + (index or 1) * 0.12) % 1, 0.85, 1)
+        elseif tracerColorMode == "Cyan Neon" then
+            return Color3.fromRGB(0, 220, 255)
+        elseif tracerColorMode == "Merah Crimson" then
+            return Color3.fromRGB(255, 50, 60)
+        elseif tracerColorMode == "Hijau Lime" then
+            return Color3.fromRGB(50, 255, 80)
+        elseif tracerColorMode == "Kuning Gold" then
+            return Color3.fromRGB(255, 215, 0)
+        else -- "Team / Status"
+            if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
+                return Color3.fromRGB(0, 255, 140)
+            else
+                return Color3.fromRGB(255, 60, 60)
+            end
+        end
+    end
 
     local function createBillboard(targetCharacter)
         local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -2258,7 +2306,7 @@ local function CreateUI()
         billboard.Size = UDim2.new(0, 160, 0, 45)
         billboard.AlwaysOnTop = true
         billboard.ExtentsOffset = Vector3.new(0, 3.5, 0)
-        
+
         local card = Instance.new("Frame")
         card.Name = "Card"
         card.Size = UDim2.new(1, 0, 1, 0)
@@ -2312,8 +2360,8 @@ local function CreateUI()
         local fillCorner = Instance.new("UICorner")
         fillCorner.CornerRadius = UDim.new(0, 3)
         fillCorner.Parent = healthFill
-        
-        billboard.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+        billboard.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
         return billboard
     end
 
@@ -2325,8 +2373,51 @@ local function CreateUI()
         highlight.FillTransparency = 0.55
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.OutlineTransparency = 0.1
-        highlight.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        highlight.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
         return highlight
+    end
+
+    local function createBoxAndTracer(plr)
+        local gui = getESPOverlayGui()
+        if not gui then return nil, nil end
+
+        -- 1. Box Frame
+        local box = Instance.new("Frame")
+        box.Name = "Box_" .. plr.Name
+        box.BackgroundTransparency = 1
+        box.BorderSizePixel = 0
+        box.Visible = false
+        box.Parent = gui
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "Stroke"
+        stroke.Thickness = 1.5
+        stroke.Color = Color3.fromRGB(255, 60, 60)
+        stroke.Parent = box
+
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Name = "Distance"
+        distLabel.Size = UDim2.new(1, 40, 0, 16)
+        distLabel.AnchorPoint = Vector2.new(0.5, 0)
+        distLabel.Position = UDim2.new(0.5, 0, 1, 2)
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        distLabel.TextStrokeTransparency = 0.4
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = 11
+        distLabel.Visible = false
+        distLabel.Parent = box
+
+        -- 2. Tracer Line Frame
+        local tracer = Instance.new("Frame")
+        tracer.Name = "Tracer_" .. plr.Name
+        tracer.AnchorPoint = Vector2.new(0.5, 0.5)
+        tracer.BorderSizePixel = 0
+        tracer.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+        tracer.Visible = false
+        tracer.Parent = gui
+
+        return box, tracer
     end
 
     local function removeESPForPlayer(plr)
@@ -2336,6 +2427,12 @@ local function CreateUI()
             end
             if espTable[plr].Highlight then
                 pcall(function() espTable[plr].Highlight:Destroy() end)
+            end
+            if espTable[plr].Box then
+                pcall(function() espTable[plr].Box:Destroy() end)
+            end
+            if espTable[plr].Tracer then
+                pcall(function() espTable[plr].Tracer:Destroy() end)
             end
             espTable[plr] = nil
         end
@@ -2349,14 +2446,27 @@ local function CreateUI()
     end
 
     local function updateESP()
-        if not flags.playerESP and not flags.highlightESP then
-            removeAllESP()
+        local isAnyPlayerESP = flags.playerESP or flags.highlightESP or flags.boxESP2D or flags.tracersESP
+        if not isAnyPlayerESP then
+            for _, data in pairs(espTable) do
+                if data.Billboard then data.Billboard.Enabled = false end
+                if data.Highlight then data.Highlight.Enabled = false end
+                if data.Box then data.Box.Visible = false end
+                if data.Tracer then data.Tracer.Visible = false end
+            end
             return
         end
 
         local myHRP = getHRP()
+        local myPos = myHRP and myHRP.Position or Vector3.zero
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        local viewport = cam.ViewportSize
+        local bottomCenter = Vector2.new(viewport.X * 0.5, viewport.Y - 5)
 
-        for _, plr in ipairs(Players:GetPlayers()) do
+        local playerList = Players:GetPlayers()
+
+        for idx, plr in ipairs(playerList) do
             if plr ~= LocalPlayer then
                 local char = plr.Character
                 local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -2366,61 +2476,138 @@ local function CreateUI()
                     if not espTable[plr] then
                         espTable[plr] = {}
                     end
+                    local data = espTable[plr]
 
-                    if flags.playerESP then
-                        if not espTable[plr].Billboard or not espTable[plr].Billboard.Parent then
-                            espTable[plr].Billboard = createBillboard(char)
+                    local dist = math.floor((hrp.Position - myPos).Magnitude)
+                    local inRange = (dist <= (espMaxDistance or 1500))
+                    local espColor = getESPColor(plr, idx)
+
+                    -- 1. BILLBOARD (Name & Health Bar)
+                    if flags.playerESP and inRange then
+                        if not data.Billboard or not data.Billboard.Parent then
+                            data.Billboard = createBillboard(char)
                         end
+                        local bb = data.Billboard
+                        if bb then
+                            bb.Enabled = true
+                            local card = bb:FindFirstChild("Card")
+                            if card then
+                                local infoText = card:FindFirstChild("InfoText")
+                                local healthFill = card:FindFirstChild("HealthBg") and card.HealthBg:FindFirstChild("HealthFill")
+                                local stroke = card:FindFirstChild("Stroke")
 
-                        local bb = espTable[plr].Billboard
-                        if bb and bb:FindFirstChild("Card") then
-                            local card = bb.Card
-                            local infoText = card:FindFirstChild("InfoText")
-                            local healthFill = card:FindFirstChild("HealthBg") and card.HealthBg:FindFirstChild("HealthFill")
-                            local stroke = card:FindFirstChild("Stroke")
+                                local healthPercent = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
 
-                            local healthPercent = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-                            local dist = myHRP and math.floor((myHRP.Position - hrp.Position).Magnitude) or 0
-
-                            if infoText then
-                                infoText.Text = string.format("%s | %d HP | %dm", plr.Name, math.floor(hum.Health), dist)
-                            end
-
-                            if healthFill then
-                                healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
-                                if healthPercent > 0.6 then
-                                    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
-                                elseif healthPercent > 0.3 then
-                                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-                                else
-                                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                                if infoText then
+                                    if flags.distanceESP then
+                                        infoText.Text = string.format("%s | %d HP | [%dm]", plr.Name, math.floor(hum.Health), dist)
+                                    else
+                                        infoText.Text = string.format("%s | %d HP", plr.Name, math.floor(hum.Health))
+                                    end
                                 end
-                            end
 
-                            if stroke then
-                                if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
-                                    stroke.Color = Color3.fromRGB(0, 255, 150)
-                                else
-                                    stroke.Color = Color3.fromRGB(255, 60, 60)
+                                if healthFill then
+                                    healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                                    if healthPercent > 0.6 then
+                                        healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+                                    elseif healthPercent > 0.3 then
+                                        healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+                                    else
+                                        healthFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                                    end
+                                end
+
+                                if stroke then
+                                    stroke.Color = espColor
                                 end
                             end
                         end
                     else
-                        if espTable[plr].Billboard then
-                            pcall(function() espTable[plr].Billboard:Destroy() end)
-                            espTable[plr].Billboard = nil
+                        if data.Billboard then
+                            data.Billboard.Enabled = false
                         end
                     end
 
-                    if flags.highlightESP then
-                        if not espTable[plr].Highlight or not espTable[plr].Highlight.Parent then
-                            espTable[plr].Highlight = createHighlight(char)
+                    -- 2. HIGHLIGHT (Chams Glow)
+                    if flags.highlightESP and inRange then
+                        if not data.Highlight or not data.Highlight.Parent then
+                            data.Highlight = createHighlight(char)
+                        end
+                        if data.Highlight then
+                            data.Highlight.Enabled = true
+                            data.Highlight.FillColor = espColor
                         end
                     else
-                        if espTable[plr].Highlight then
-                            pcall(function() espTable[plr].Highlight:Destroy() end)
-                            espTable[plr].Highlight = nil
+                        if data.Highlight then
+                            data.Highlight.Enabled = false
                         end
+                    end
+
+                    -- 3. BOX ESP 2D & TRACERS ESP
+                    if (flags.boxESP2D or flags.tracersESP) and inRange then
+                        if not data.Box or not data.Box.Parent or not data.Tracer or not data.Tracer.Parent then
+                            data.Box, data.Tracer = createBoxAndTracer(plr)
+                        end
+
+                        local hrpPos = hrp.Position
+                        local top3D = hrpPos + Vector3.new(0, 2.7, 0)
+                        local bot3D = hrpPos - Vector3.new(0, 3.2, 0)
+
+                        local topScreen, topOn = cam:WorldToViewportPoint(top3D)
+                        local botScreen, botOn = cam:WorldToViewportPoint(bot3D)
+                        local hrpScreen, hrpOn = cam:WorldToViewportPoint(hrpPos)
+
+                        -- 3A. BOX ESP 2D
+                        if flags.boxESP2D and (topOn or botOn) and topScreen.Z > 0 and botScreen.Z > 0 then
+                            local height = math.abs(botScreen.Y - topScreen.Y)
+                            local width = math.max(height * 0.65, 10)
+                            local centerX = (topScreen.X + botScreen.X) / 2
+                            local centerY = (topScreen.Y + botScreen.Y) / 2
+
+                            if data.Box then
+                                data.Box.Size = UDim2.new(0, width, 0, height)
+                                data.Box.Position = UDim2.new(0, centerX - width / 2, 0, centerY - height / 2)
+                                local bStroke = data.Box:FindFirstChild("Stroke")
+                                if bStroke then bStroke.Color = espColor end
+
+                                local dLabel = data.Box:FindFirstChild("Distance")
+                                if dLabel then
+                                    if flags.distanceESP then
+                                        dLabel.Text = string.format("[%dm]", dist)
+                                        dLabel.TextColor3 = espColor
+                                        dLabel.Visible = true
+                                    else
+                                        dLabel.Visible = false
+                                    end
+                                end
+
+                                data.Box.Visible = true
+                            end
+                        else
+                            if data.Box then data.Box.Visible = false end
+                        end
+
+                        -- 3B. TRACERS ESP (Garis dari bawah tengah layar)
+                        if flags.tracersESP and hrpOn and hrpScreen.Z > 0 then
+                            if data.Tracer then
+                                local target2D = Vector2.new(hrpScreen.X, hrpScreen.Y)
+                                local diff = target2D - bottomCenter
+                                local length = diff.Magnitude
+                                local angle = math.deg(math.atan2(diff.Y, diff.X))
+                                local center = (bottomCenter + target2D) / 2
+
+                                data.Tracer.Size = UDim2.new(0, length, 0, 1.5)
+                                data.Tracer.Position = UDim2.new(0, center.X, 0, center.Y)
+                                data.Tracer.Rotation = angle
+                                data.Tracer.BackgroundColor3 = espColor
+                                data.Tracer.Visible = true
+                            end
+                        else
+                            if data.Tracer then data.Tracer.Visible = false end
+                        end
+                    else
+                        if data.Box then data.Box.Visible = false end
+                        if data.Tracer then data.Tracer.Visible = false end
                     end
                 else
                     removeESPForPlayer(plr)
@@ -2431,12 +2618,189 @@ local function CreateUI()
         end
     end
 
+    -- Universal Item & Chest Scanner Functions
+    local function cleanupItemESP()
+        for desc, data in pairs(itemESPTable) do
+            if data.Billboard then
+                pcall(function() data.Billboard:Destroy() end)
+            end
+        end
+        itemESPTable = {}
+    end
+
+    local function scanWorkspaceItems()
+        if not flags.itemESP then return end
+        local myHRP = getHRP()
+        local myPos = myHRP and myHRP.Position or Vector3.zero
+
+        local chestPatterns = {"chest", "crate", "treasure", "peti", "loot", "box", "vault", "safe", "gift"}
+        local dropPatterns = {"drop", "pickup", "ore", "coin", "gem", "money", "cash", "diamond", "relic", "fruit"}
+
+        local foundCount = 0
+        local maxItemsToTrack = 60
+
+        for _, desc in ipairs(Workspace:GetDescendants()) do
+            if foundCount >= maxItemsToTrack then break end
+
+            if not desc:IsDescendantOf(Players) and not (LocalPlayer.Character and desc:IsDescendantOf(LocalPlayer.Character)) then
+                local itemType = nil
+                local icon = "📦"
+                local color = Color3.fromRGB(255, 200, 50)
+                local targetPart = nil
+                local nameLower = string.lower(desc.Name)
+
+                -- 1. Tools (Weapons / Dropped tools)
+                if flags.filterTools and desc:IsA("Tool") then
+                    targetPart = desc:FindFirstChild("Handle") or desc:FindFirstChildWhichIsA("BasePart")
+                    if targetPart then
+                        itemType = "Tool"
+                        icon = "⚔️"
+                        color = Color3.fromRGB(0, 210, 255)
+                    end
+                -- 2. Chests & Crates
+                elseif flags.filterChests and (desc:IsA("Model") or desc:IsA("BasePart")) then
+                    for _, pat in ipairs(chestPatterns) do
+                        if string.find(nameLower, pat) then
+                            targetPart = desc:IsA("BasePart") and desc or (desc.PrimaryPart or desc:FindFirstChildWhichIsA("BasePart"))
+                            if targetPart then
+                                itemType = "Chest"
+                                icon = "📦"
+                                color = Color3.fromRGB(255, 175, 25)
+                                break
+                            end
+                        end
+                    end
+                end
+
+                -- 3. Drops & Pickups
+                if not itemType and flags.filterDrops and (desc:IsA("Model") or desc:IsA("BasePart")) then
+                    for _, pat in ipairs(dropPatterns) do
+                        if string.find(nameLower, pat) then
+                            targetPart = desc:IsA("BasePart") and desc or (desc.PrimaryPart or desc:FindFirstChildWhichIsA("BasePart"))
+                            if targetPart then
+                                itemType = "Drop"
+                                icon = "💎"
+                                color = Color3.fromRGB(0, 255, 160)
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if itemType and targetPart and not itemESPTable[desc] then
+                    local dist = (targetPart.Position - myPos).Magnitude
+                    if dist <= (itemEspMaxDistance or 600) then
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name = "ItemESP_" .. desc.Name
+                        bb.Adornee = targetPart
+                        bb.Size = UDim2.new(0, 140, 0, 30)
+                        bb.AlwaysOnTop = true
+                        bb.ExtentsOffset = Vector3.new(0, 1.5, 0)
+
+                        local card = Instance.new("Frame")
+                        card.Name = "Card"
+                        card.Size = UDim2.new(1, 0, 1, 0)
+                        card.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+                        card.BackgroundTransparency = 0.25
+                        card.BorderSizePixel = 0
+                        card.Parent = bb
+
+                        local corner = Instance.new("UICorner")
+                        corner.CornerRadius = UDim.new(0, 6)
+                        corner.Parent = card
+
+                        local stroke = Instance.new("UIStroke")
+                        stroke.Name = "Stroke"
+                        stroke.Color = color
+                        stroke.Thickness = 1.5
+                        stroke.Transparency = 0.2
+                        stroke.Parent = card
+
+                        local textLabel = Instance.new("TextLabel")
+                        textLabel.Name = "Label"
+                        textLabel.Size = UDim2.new(1, -8, 1, 0)
+                        textLabel.Position = UDim2.new(0, 4, 0, 0)
+                        textLabel.BackgroundTransparency = 1
+                        textLabel.TextColor3 = color
+                        textLabel.Font = Enum.Font.GothamBold
+                        textLabel.TextSize = 11
+                        textLabel.Text = string.format("%s %s [%dm]", icon, desc.Name, math.floor(dist))
+                        textLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                        textLabel.Parent = card
+
+                        bb.Parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+
+                        itemESPTable[desc] = {
+                            Billboard = bb,
+                            Part = targetPart,
+                            Type = itemType,
+                            Icon = icon,
+                            Color = color,
+                            Name = desc.Name
+                        }
+                        foundCount = foundCount + 1
+                    end
+                end
+            end
+        end
+    end
+
+    local function updateItemESP()
+        if not flags.itemESP then
+            cleanupItemESP()
+            return
+        end
+
+        local myHRP = getHRP()
+        local myPos = myHRP and myHRP.Position or Vector3.zero
+
+        for desc, data in pairs(itemESPTable) do
+            if not desc.Parent or not data.Part or not data.Part.Parent then
+                if data.Billboard then
+                    pcall(function() data.Billboard:Destroy() end)
+                end
+                itemESPTable[desc] = nil
+            else
+                local dist = (data.Part.Position - myPos).Magnitude
+                if dist > (itemEspMaxDistance or 600) then
+                    if data.Billboard then
+                        data.Billboard.Enabled = false
+                    end
+                else
+                    if data.Billboard then
+                        data.Billboard.Enabled = true
+                        local card = data.Billboard:FindFirstChild("Card")
+                        local label = card and card:FindFirstChild("Label")
+                        if label then
+                            label.Text = string.format("%s %s [%dm]", data.Icon, data.Name, math.floor(dist))
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local itemScanLoopRunning = false
+    local function startItemScanLoop()
+        if itemScanLoopRunning then return end
+        itemScanLoopRunning = true
+        task.spawn(function()
+            while true do
+                if flags.itemESP then
+                    pcall(scanWorkspaceItems)
+                end
+                task.wait(2.5)
+            end
+        end)
+    end
+
     UIControls.Toggles["PlayerESP"] = VisualsTab:CreateToggle({
         Name = "Name & Health Bar ESP",
         CurrentValue = false,
+        Flag = "PlayerESPToggle",
         Callback = function(enabled)
             flags.playerESP = enabled
-            if not enabled and not flags.highlightESP then
+            if not enabled and not flags.highlightESP and not flags.boxESP2D and not flags.tracersESP then
                 removeAllESP()
             end
         end
@@ -2445,25 +2809,180 @@ local function CreateUI()
     UIControls.Toggles["HighlightESP"] = VisualsTab:CreateToggle({
         Name = "Chams Glow ESP (Through Walls)",
         CurrentValue = false,
+        Flag = "HighlightESPToggle",
         Callback = function(enabled)
             flags.highlightESP = enabled
-            if not enabled and not flags.playerESP then
+            if not enabled and not flags.playerESP and not flags.boxESP2D and not flags.tracersESP then
                 removeAllESP()
             end
         end
     })
 
+    UIControls.Toggles["BoxESP2D"] = VisualsTab:CreateToggle({
+        Name = "Box ESP 2D (Kotak Musuh)",
+        CurrentValue = false,
+        Flag = "BoxESP2DToggle",
+        Callback = function(enabled)
+            flags.boxESP2D = enabled
+            if not enabled and not flags.playerESP and not flags.highlightESP and not flags.tracersESP then
+                removeAllESP()
+            end
+        end
+    })
+
+    UIControls.Toggles["TracersESP"] = VisualsTab:CreateToggle({
+        Name = "Tracers ESP (Garis Penunjuk Musuh)",
+        CurrentValue = false,
+        Flag = "TracersESPToggle",
+        Callback = function(enabled)
+            flags.tracersESP = enabled
+            if not enabled and not flags.playerESP and not flags.highlightESP and not flags.boxESP2D then
+                removeAllESP()
+            end
+        end
+    })
+
+    UIControls.Toggles["DistanceESP"] = VisualsTab:CreateToggle({
+        Name = "Distance ESP (Tampilkan Jarak Meter)",
+        CurrentValue = true,
+        Flag = "DistanceESPToggle",
+        Callback = function(enabled)
+            flags.distanceESP = enabled
+        end
+    })
+
+    UIControls.Dropdowns["TracerColorMode"] = VisualsTab:CreateDropdown({
+        Name = "Warna Tracers & Box ESP",
+        Options = {
+            "Rainbow (Warna-warni)",
+            "Team / Status",
+            "Cyan Neon",
+            "Merah Crimson",
+            "Hijau Lime",
+            "Kuning Gold"
+        },
+        CurrentOption = {"Rainbow (Warna-warni)"},
+        MultipleOptions = false,
+        Flag = "TracerColorDropdown",
+        Callback = function(option)
+            local chosen = (typeof(option) == "table" and option[1]) or option
+            if chosen == "Rainbow (Warna-warni)" then
+                tracerColorMode = "Rainbow"
+            elseif chosen == "Cyan Neon" then
+                tracerColorMode = "Cyan Neon"
+            elseif chosen == "Merah Crimson" then
+                tracerColorMode = "Merah Crimson"
+            elseif chosen == "Hijau Lime" then
+                tracerColorMode = "Hijau Lime"
+            elseif chosen == "Kuning Gold" then
+                tracerColorMode = "Kuning Gold"
+            else
+                tracerColorMode = "Team / Status"
+            end
+        end
+    })
+
+    UIControls.Sliders["ESPMaxDistance"] = VisualsTab:CreateSlider({
+        Name = "Jarak Maksimal Player ESP (Studs)",
+        Range = {100, 3000},
+        Increment = 50,
+        Suffix = " studs",
+        CurrentValue = 1500,
+        Flag = "ESPMaxDistanceSlider",
+        Callback = function(val)
+            espMaxDistance = tonumber(val) or 1500
+        end
+    })
+
     VisualsTab:CreateButton({
-        Name = "Refresh ESP",
+        Name = "🔄 Refresh Player ESP",
         Callback = function()
             removeAllESP()
-            updateESP()
+            pcall(updateESP)
+            sendNotification("👁️ Player ESP", "Player ESP berhasil diperbarui!", 2)
+        end
+    })
+
+    VisualsTab:CreateSection("Item & Chest ESP System")
+
+    UIControls.Toggles["ItemChestESP"] = VisualsTab:CreateToggle({
+        Name = "Item, Tool & Chest ESP (Universal)",
+        CurrentValue = false,
+        Flag = "ItemChestESPToggle",
+        Callback = function(enabled)
+            flags.itemESP = enabled
+            if enabled then
+                startItemScanLoop()
+                task.spawn(function()
+                    sendNotification("📦 Item ESP", "Memindai item, senjata, dan peti di map...", 2)
+                    pcall(scanWorkspaceItems)
+                end)
+            else
+                cleanupItemESP()
+            end
+        end
+    })
+
+    UIControls.Toggles["FilterToolsOnly"] = VisualsTab:CreateToggle({
+        Name = "⚔️ Tampilkan Senjata & Tool di Tanah",
+        CurrentValue = true,
+        Flag = "FilterToolsToggle",
+        Callback = function(enabled)
+            flags.filterTools = enabled
+            cleanupItemESP()
+            if flags.itemESP then pcall(scanWorkspaceItems) end
+        end
+    })
+
+    UIControls.Toggles["FilterChestsOnly"] = VisualsTab:CreateToggle({
+        Name = "📦 Tampilkan Peti / Chest / Box",
+        CurrentValue = true,
+        Flag = "FilterChestsToggle",
+        Callback = function(enabled)
+            flags.filterChests = enabled
+            cleanupItemESP()
+            if flags.itemESP then pcall(scanWorkspaceItems) end
+        end
+    })
+
+    UIControls.Toggles["FilterDropsOnly"] = VisualsTab:CreateToggle({
+        Name = "💎 Tampilkan Drop / Ore / Coin / Gem",
+        CurrentValue = true,
+        Flag = "FilterDropsToggle",
+        Callback = function(enabled)
+            flags.filterDrops = enabled
+            cleanupItemESP()
+            if flags.itemESP then pcall(scanWorkspaceItems) end
+        end
+    })
+
+    UIControls.Sliders["ItemESPRange"] = VisualsTab:CreateSlider({
+        Name = "Jarak Maksimal Item ESP (Studs)",
+        Range = {50, 2500},
+        Increment = 50,
+        Suffix = " studs",
+        CurrentValue = 600,
+        Flag = "ItemESPRangeSlider",
+        Callback = function(val)
+            itemEspMaxDistance = tonumber(val) or 600
+        end
+    })
+
+    VisualsTab:CreateButton({
+        Name = "🔄 Scan Ulang Item & Chest di Map",
+        Callback = function()
+            cleanupItemESP()
+            pcall(scanWorkspaceItems)
+            sendNotification("📦 Item ESP", "Peta berhasil dipindai ulang!", 2)
         end
     })
 
     setConn("espRender", RunService.RenderStepped:Connect(function()
-        if flags.playerESP or flags.highlightESP then
+        if flags.playerESP or flags.highlightESP or flags.boxESP2D or flags.tracersESP then
             pcall(updateESP)
+        end
+        if flags.itemESP then
+            pcall(updateItemESP)
         end
     end))
 
