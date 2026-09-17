@@ -159,6 +159,11 @@ function ConfigManager:Save(configName)
         },
         toggles = {},
         sliders = {},
+        dropdowns = {},
+        autoClick = {
+            mode = autoClickPositionMode,
+            customCoords = customClickCoords and { x = customClickCoords.X, y = customClickCoords.Y } or nil
+        },
         teleport = {
             savedSlots = {},
             quickTP = {}
@@ -176,6 +181,13 @@ function ConfigManager:Save(configName)
     for name, sliderObj in pairs(UIControls.Sliders) do
         if sliderObj and sliderObj.CurrentValue ~= nil then
             data.sliders[name] = sliderObj.CurrentValue
+        end
+    end
+
+    -- 3. Save UI Dropdowns
+    for name, dropdownObj in pairs(UIControls.Dropdowns) do
+        if dropdownObj and dropdownObj.CurrentOption then
+            data.dropdowns[name] = dropdownObj.CurrentOption
         end
     end
 
@@ -296,7 +308,27 @@ function ConfigManager:Load(configName)
         end
     end
 
-    -- 4. Restore Toggles (This triggers callbacks and turns on features!)
+    -- 4. Restore Dropdowns
+    if data.dropdowns then
+        for name, val in pairs(data.dropdowns) do
+            local ddObj = UIControls.Dropdowns[name]
+            if ddObj and ddObj.Set then
+                pcall(function() ddObj:Set(val) end)
+            end
+        end
+    end
+
+    -- 5. Restore AutoClick Settings & Custom Coords
+    if data.autoClick then
+        if data.autoClick.mode then
+            autoClickPositionMode = data.autoClick.mode
+        end
+        if data.autoClick.customCoords and data.autoClick.customCoords.x and data.autoClick.customCoords.y then
+            customClickCoords = Vector2.new(data.autoClick.customCoords.x, data.autoClick.customCoords.y)
+        end
+    end
+
+    -- 6. Restore Toggles (This triggers callbacks and turns on features!)
     if data.toggles then
         for name, val in pairs(data.toggles) do
             local toggleObj = UIControls.Toggles[name]
@@ -353,6 +385,9 @@ local killAuraDelay = 0.5 -- Delay antar serangan Kill Aura
 local selectedFlingPlayerName = nil
 local spinBotSpeed = 30
 local autoClickDelay = 0.05
+local autoClickPositionMode = "bottom" -- "bottom", "center", "custom"
+local customClickCoords = nil
+local autoClickMarkerGui = nil
 local fovCircleDrawing = nil
 local fovCircleGui = nil
 
@@ -772,35 +807,161 @@ local function setSpinBot(enabled)
     end
 end
 
+-- Auto-Clicker Target Coordinate Calculation
+local function getAutoClickTargetCoords()
+    local cam = Workspace.CurrentCamera
+    local viewport = cam and cam.ViewportSize or Vector2.new(1280, 720)
+
+    if autoClickPositionMode == "custom" and customClickCoords then
+        return customClickCoords.X, customClickCoords.Y
+    elseif autoClickPositionMode == "center" then
+        return viewport.X * 0.5, viewport.Y * 0.5
+    else
+        -- "bottom": Area bawah tengah yang aman (sesuai panah oranye pengguna)
+        -- Sekitar 88% tinggi layar, tepat di bawah tengah/sekitar hotbar tanpa menyentuh menu lain
+        return viewport.X * 0.5, math.floor(viewport.Y * 0.88)
+    end
+end
+
+-- Visual Target Marker for Auto-Clicker (Draggable)
+local function updateAutoClickMarker(visible)
+    if not visible then
+        if autoClickMarkerGui then
+            pcall(function() autoClickMarkerGui:Destroy() end)
+            autoClickMarkerGui = nil
+        end
+        return
+    end
+
+    if autoClickMarkerGui then
+        pcall(function() autoClickMarkerGui:Destroy() end)
+        autoClickMarkerGui = nil
+    end
+
+    local parent = (gethui and gethui()) or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not parent then return end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BoyeszAutoClickMarker"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.DisplayOrder = 999
+    gui.Parent = parent
+    autoClickMarkerGui = gui
+
+    local clickX, clickY = getAutoClickTargetCoords()
+
+    local dot = Instance.new("Frame")
+    dot.Name = "ClickPoint"
+    dot.Size = UDim2.new(0, 36, 0, 36)
+    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+    dot.Position = UDim2.new(0, clickX, 0, clickY)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    dot.BackgroundTransparency = 0.3
+    dot.Active = true
+    dot.Draggable = true
+    dot.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = dot
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 2
+    stroke.Parent = dot
+
+    local inner = Instance.new("Frame")
+    inner.Size = UDim2.new(0, 8, 0, 8)
+    inner.AnchorPoint = Vector2.new(0.5, 0.5)
+    inner.Position = UDim2.new(0.5, 0, 0.5, 0)
+    inner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    inner.Parent = dot
+    local innerCorner = Instance.new("UICorner")
+    innerCorner.CornerRadius = UDim.new(1, 0)
+    innerCorner.Parent = inner
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 150, 0, 20)
+    label.AnchorPoint = Vector2.new(0.5, 1)
+    label.Position = UDim2.new(0.5, 0, 0, -5)
+    label.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+    label.BackgroundTransparency = 0.3
+    label.TextColor3 = Color3.fromRGB(255, 215, 0)
+    label.Text = "🎯 Titik Klik (Geser Bebas)"
+    label.TextSize = 11
+    label.Font = Enum.Font.GothamBold
+    label.Parent = dot
+    local labelCorner = Instance.new("UICorner")
+    labelCorner.CornerRadius = UDim.new(0, 4)
+    labelCorner.Parent = label
+
+    -- Bila digeser, simpan koordinat baru
+    dot:GetPropertyChangedSignal("Position"):Connect(function()
+        local pos = dot.Position
+        customClickCoords = Vector2.new(pos.X.Offset, pos.Y.Offset)
+        autoClickPositionMode = "custom"
+    end)
+end
+
 -- Auto-Clicker / Fast Attack Function
 local function setAutoClicker(enabled)
     flags.autoClicker = enabled
     clearConn("autoClickerLoop")
     if enabled then
         task.spawn(function()
-            local vu = game:GetService("VirtualUser")
+            local vu = nil
+            pcall(function() vu = game:GetService("VirtualUser") end)
+            local vim = nil
+            pcall(function() vim = game:GetService("VirtualInputManager") end)
+
+            sendNotification("🎯 Auto-Clicker", "Auto-Clicker Aktif (Terkunci di Area Bawah)", 2)
+
             while flags.autoClicker do
-                -- 1. Activate tool if equipped
+                local targetX, targetY = getAutoClickTargetCoords()
+
+                -- 1. Activate tool if equipped (Starter Rod / Pedang / Weapon)
                 local char = getCharacter()
                 local tool = char and char:FindFirstChildOfClass("Tool")
                 if tool then
                     pcall(function() tool:Activate() end)
                 end
-                -- 2. Virtual click (Mobile & PC)
-                pcall(function()
-                    vu:CaptureController()
-                    vu:Button1Down(Vector2.new(0, 0))
-                    task.wait(0.01)
-                    vu:Button1Up(Vector2.new(0, 0))
-                end)
-                -- 3. Executor native mouse click
-                if mouse1click then
-                    pcall(mouse1click)
+
+                -- 2. VirtualInputManager (Klik presisi di targetX, targetY tanpa menggeser kursor)
+                if vim then
+                    pcall(function()
+                        vim:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
+                        task.wait(0.005)
+                        vim:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
+                    end)
+                    pcall(function()
+                        vim:SendTouchEvent(1, 0, targetX, targetY)
+                        task.wait(0.005)
+                        vim:SendTouchEvent(1, 2, targetX, targetY)
+                    end)
                 end
+
+                -- 3. VirtualUser pada koordinat tetap targetX, targetY
+                if vu then
+                    pcall(function()
+                        vu:CaptureController()
+                        vu:Button1Down(Vector2.new(targetX, targetY))
+                        task.wait(0.005)
+                        vu:Button1Up(Vector2.new(targetX, targetY))
+                    end)
+                end
+
+                -- 4. Native click_at jika executor menyediakan
+                if click_at then
+                    pcall(click_at, targetX, targetY)
+                end
+
                 local delayTime = tonumber(autoClickDelay) or 0.05
                 task.wait(math.max(delayTime, 0.01))
             end
         end)
+    else
+        sendNotification("🎯 Auto-Clicker", "Auto-Clicker Dimatikan", 2)
     end
 end
 
@@ -1793,6 +1954,7 @@ local function CreateUI()
     UIControls.Toggles["AutoClicker"] = CombatTab:CreateToggle({
         Name = "Auto-Clicker / Fast Attack",
         CurrentValue = false,
+        Flag = "AutoClickerToggle",
         Callback = setAutoClicker
     })
 
@@ -1802,8 +1964,72 @@ local function CreateUI()
         Increment = 0.01,
         Suffix = "s",
         CurrentValue = 0.05,
+        Flag = "AutoClickDelaySlider",
         Callback = function(val)
             autoClickDelay = val
+        end
+    })
+
+    UIControls.Dropdowns["AutoClickPosMode"] = CombatTab:CreateDropdown({
+        Name = "Posisi Titik Klik di Layar",
+        Options = {
+            "Bawah Layar (Aman / Sesuai Panah)",
+            "Tengah Layar (Center Screen)",
+            "Kustom (Bebas Geser Marker)"
+        },
+        CurrentOption = {"Bawah Layar (Aman / Sesuai Panah)"},
+        MultipleOptions = false,
+        Flag = "AutoClickPosModeDropdown",
+        Callback = function(option)
+            local chosen = (typeof(option) == "table" and option[1]) or option
+            if chosen == "Tengah Layar (Center Screen)" then
+                autoClickPositionMode = "center"
+            elseif chosen == "Kustom (Bebas Geser Marker)" then
+                autoClickPositionMode = "custom"
+                updateAutoClickMarker(true)
+                if UIControls.Toggles["ShowClickMarker"] then
+                    pcall(function() UIControls.Toggles["ShowClickMarker"]:Set(true) end)
+                end
+            else
+                autoClickPositionMode = "bottom"
+            end
+            if autoClickMarkerGui then
+                local cx, cy = getAutoClickTargetCoords()
+                local dot = autoClickMarkerGui:FindFirstChild("ClickPoint")
+                if dot then
+                    dot.Position = UDim2.new(0, cx, 0, cy)
+                end
+            end
+        end
+    })
+
+    UIControls.Toggles["ShowClickMarker"] = CombatTab:CreateToggle({
+        Name = "🎯 Tampilkan / Geser Titik Klik di Layar",
+        CurrentValue = false,
+        Flag = "ShowClickMarkerToggle",
+        Callback = function(enabled)
+            updateAutoClickMarker(enabled)
+        end
+    })
+
+    CombatTab:CreateButton({
+        Name = "📍 Reset Titik Klik ke Bawah Layar",
+        Callback = function()
+            autoClickPositionMode = "bottom"
+            customClickCoords = nil
+            if UIControls.Dropdowns["AutoClickPosMode"] then
+                pcall(function()
+                    UIControls.Dropdowns["AutoClickPosMode"]:Set({"Bawah Layar (Aman / Sesuai Panah)"})
+                end)
+            end
+            if autoClickMarkerGui then
+                local cx, cy = getAutoClickTargetCoords()
+                local dot = autoClickMarkerGui:FindFirstChild("ClickPoint")
+                if dot then
+                    dot.Position = UDim2.new(0, cx, 0, cy)
+                end
+            end
+            sendNotification("🎯 Titik Klik", "Posisi klik dikembalikan ke area bawah aman!", 2)
         end
     })
 
