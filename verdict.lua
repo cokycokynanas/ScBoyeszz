@@ -10,6 +10,7 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
+local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 local Stats = game:GetService("Stats")
@@ -348,6 +349,18 @@ local originalSizeData = {} -- NEW: Dipindahkan ke global agar fungsi bisa diaks
 local killAuraRange = 25 -- Jarak Kill Aura
 local killAuraDelay = 0.5 -- Delay antar serangan Kill Aura
 
+-- Combat & Troll Extended State
+local selectedFlingPlayerName = nil
+local spinBotSpeed = 30
+local autoClickDelay = 0.05
+local fovCircleDrawing = nil
+local fovCircleGui = nil
+
+-- Tween Teleport & Dev Tools State
+local activeTweenTeleport = nil
+local tweenTeleportSpeed = 150
+local clickToDeleteEnabled = false
+
 -- Helpers for connections
 local function safeDisconnect(conn)
     if conn then
@@ -648,6 +661,384 @@ local function doKillAura()
             end
         end
     end
+end
+
+-- FOV Circle Functions (Drawing API + ScreenGui Fallback)
+local function updateFOVCircle()
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+    local radius = tonumber(aimbotRange) or 150
+
+    if Drawing then
+        if not fovCircleDrawing then
+            local ok, d = pcall(function()
+                return Drawing.new("Circle")
+            end)
+            if ok and d then
+                fovCircleDrawing = d
+                fovCircleDrawing.Thickness = 1.5
+                fovCircleDrawing.Color = Color3.fromRGB(0, 200, 255)
+                fovCircleDrawing.Filled = false
+                fovCircleDrawing.Transparency = 0.8
+            end
+        end
+        if fovCircleDrawing then
+            fovCircleDrawing.Visible = flags.showFOV or false
+            fovCircleDrawing.Radius = radius
+            fovCircleDrawing.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            return
+        end
+    end
+
+    -- Fallback ScreenGui for Mobile / Non-Drawing Executors
+    local parent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui", 5)
+    if parent and (not fovCircleGui or not fovCircleGui.Parent) then
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "BoyeszAimbotFOV_Gui"
+        gui.ResetOnSpawn = false
+        gui.Parent = parent
+
+        local frame = Instance.new("Frame")
+        frame.Name = "CircleFrame"
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+        frame.BackgroundTransparency = 1
+        frame.BorderSizePixel = 0
+        frame.Parent = gui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = frame
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(0, 200, 255)
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.25
+        stroke.Parent = frame
+
+        fovCircleGui = gui
+    end
+
+    if fovCircleGui then
+        local frame = fovCircleGui:FindFirstChild("CircleFrame")
+        if frame then
+            frame.Visible = flags.showFOV or false
+            frame.Size = UDim2.new(0, radius * 2, 0, radius * 2)
+        end
+    end
+end
+
+local function setFOVCircle(enabled)
+    flags.showFOV = enabled
+    clearConn("fovCircleConn")
+    if enabled then
+        updateFOVCircle()
+        setConn("fovCircleConn", RunService.RenderStepped:Connect(function()
+            if flags.showFOV then
+                updateFOVCircle()
+            end
+        end))
+    else
+        if fovCircleDrawing then
+            pcall(function() fovCircleDrawing.Visible = false end)
+        end
+        if fovCircleGui then
+            local frame = fovCircleGui:FindFirstChild("CircleFrame")
+            if frame then frame.Visible = false end
+        end
+    end
+end
+
+-- SpinBot / Anti-Aim Function
+local function setSpinBot(enabled)
+    flags.spinBot = enabled
+    clearConn("spinBotLoop")
+    local hum = getHumanoid()
+    if hum then
+        hum.AutoRotate = not enabled
+    end
+    if enabled then
+        setConn("spinBotLoop", RunService.RenderStepped:Connect(function()
+            local hrp = getHRP()
+            if hrp and flags.spinBot then
+                local speed = tonumber(spinBotSpeed) or 30
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(speed), 0)
+            end
+        end))
+    else
+        if hum then
+            hum.AutoRotate = true
+        end
+    end
+end
+
+-- Auto-Clicker / Fast Attack Function
+local function setAutoClicker(enabled)
+    flags.autoClicker = enabled
+    clearConn("autoClickerLoop")
+    if enabled then
+        task.spawn(function()
+            local vu = game:GetService("VirtualUser")
+            while flags.autoClicker do
+                -- 1. Activate tool if equipped
+                local char = getCharacter()
+                local tool = char and char:FindFirstChildOfClass("Tool")
+                if tool then
+                    pcall(function() tool:Activate() end)
+                end
+                -- 2. Virtual click (Mobile & PC)
+                pcall(function()
+                    vu:CaptureController()
+                    vu:Button1Down(Vector2.new(0, 0))
+                    task.wait(0.01)
+                    vu:Button1Up(Vector2.new(0, 0))
+                end)
+                -- 3. Executor native mouse click
+                if mouse1click then
+                    pcall(mouse1click)
+                end
+                local delayTime = tonumber(autoClickDelay) or 0.05
+                task.wait(math.max(delayTime, 0.01))
+            end
+        end)
+    end
+end
+
+-- Universal Fling Function
+local function flingTargetPlayer(targetName, isLoop)
+    if not targetName or targetName == "" then return end
+    local targetPlr = Players:FindFirstChild(targetName)
+    if not targetPlr or not targetPlr.Character then return end
+    local targetHRP = targetPlr.Character:FindFirstChild("HumanoidRootPart")
+    local myHRP = getHRP()
+    local myChar = getCharacter()
+    local hum = getHumanoid()
+    if not targetHRP or not myHRP or not hum or not myChar then return end
+
+    local oldPos = myHRP.CFrame
+    local startTime = tick()
+    local originalCanCollide = {}
+
+    pcall(function()
+        for _, part in ipairs(myChar:GetChildren()) do
+            if part:IsA("BasePart") then
+                originalCanCollide[part] = part.CanCollide
+                part.CanCollide = false
+            end
+        end
+    end)
+
+    task.spawn(function()
+        while (isLoop and flags.flingLoop) or (not isLoop and (tick() - startTime < 1.5)) do
+            if not targetPlr.Parent or not targetPlr.Character or not targetHRP.Parent or hum.Health <= 0 then
+                break
+            end
+            local targetPos = targetHRP.Position
+            myHRP.CFrame = CFrame.new(targetPos + Vector3.new(math.random(-1, 1)/10, 0, math.random(-1, 1)/10))
+            myHRP.Velocity = Vector3.new(0, 10000, 0)
+            myHRP.RotVelocity = Vector3.new(99999, 99999, 99999)
+            task.wait(0.02)
+        end
+
+        pcall(function()
+            myHRP.Velocity = Vector3.zero
+            myHRP.RotVelocity = Vector3.zero
+            for part, canCollide in pairs(originalCanCollide) do
+                if part and part.Parent then
+                    part.CanCollide = canCollide
+                end
+            end
+            myHRP.CFrame = oldPos
+        end)
+    end)
+end
+
+local function flingAllPlayers()
+    local myHRP = getHRP()
+    if not myHRP then return end
+    local originalPos = myHRP.CFrame
+    task.spawn(function()
+        sendNotification("🌪️ Fling All", "Memulai melempar semua pemain...", 2)
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid") and p.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+                flingTargetPlayer(p.Name, false)
+                task.wait(0.7)
+            end
+        end
+        myHRP.CFrame = originalPos
+        sendNotification("🌪️ Fling All", "Selesai melempar semua pemain!", 2)
+    end)
+end
+
+-- ==========================================================
+-- TWEEN TELEPORT (Bypass Anti-Cheat Teleport)
+-- ==========================================================
+local function cancelTweenTeleport()
+    if activeTweenTeleport then
+        pcall(function()
+            activeTweenTeleport:Cancel()
+        end)
+        activeTweenTeleport = nil
+        sendNotification("🚀 Tween Teleport", "Tween Teleport dihentikan / dibatalkan.", 2)
+    end
+end
+
+local function startTweenTeleport(targetCFrame)
+    local hrp = getHRP()
+    if not hrp then
+        sendNotification("🚀 Tween Teleport", "Karakter tidak ditemukan!", 2)
+        return
+    end
+    if not targetCFrame then
+        sendNotification("🚀 Tween Teleport", "Tujuan teleport tidak valid!", 2)
+        return
+    end
+
+    if activeTweenTeleport then
+        cancelTweenTeleport()
+    end
+
+    local distance = (targetCFrame.Position - hrp.Position).Magnitude
+    local speed = math.clamp(tweenTeleportSpeed or 150, 20, 1000)
+    local duration = distance / speed
+
+    local tweenInfo = TweenInfo.new(
+        duration,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out
+    )
+
+    local tween = TweenService:Create(hrp, tweenInfo, { CFrame = targetCFrame })
+    activeTweenTeleport = tween
+
+    tween.Completed:Connect(function(playbackState)
+        if activeTweenTeleport == tween then
+            activeTweenTeleport = nil
+            if playbackState == Enum.PlaybackState.Completed then
+                sendNotification("🚀 Tween Teleport", "Berhasil sampai di tujuan!", 2)
+            end
+        end
+    end)
+
+    tween:Play()
+    sendNotification("🚀 Tween Teleport", string.format("Meluncur... (%.1f dtk, %.0f studs/s)", duration, speed), 2)
+end
+
+-- ==========================================================
+-- CLIENT-SIDE BTOOL (Delete Part / Wall Remover)
+-- ==========================================================
+local function giveBTool()
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then
+        sendNotification("🔨 BTool", "Backpack tidak ditemukan!", 2)
+        return
+    end
+
+    local existingTool = backpack:FindFirstChild("DeletePartTool") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("DeletePartTool"))
+    if existingTool then
+        existingTool:Destroy()
+    end
+
+    local tool = Instance.new("Tool")
+    tool.Name = "DeletePartTool"
+    tool.RequiresHandle = false
+    tool.CanBeDropped = false
+    tool.ToolTip = "Klik pada Part untuk menghapusnya (Client-Side)"
+
+    tool.Activated:Connect(function()
+        local mouse = LocalPlayer:GetMouse()
+        if mouse and mouse.Target then
+            local target = mouse.Target
+            if LocalPlayer.Character and target:IsDescendantOf(LocalPlayer.Character) then
+                return
+            end
+            local partName = target.Name
+            pcall(function()
+                target:Destroy()
+            end)
+            sendNotification("🔨 BTool", "Dihapus: " .. tostring(partName), 1.5)
+        end
+    end)
+
+    tool.Parent = backpack
+    sendNotification("🔨 BTool", "Delete Tool berhasil ditambahkan ke Backpack!", 3)
+end
+
+local function setClickToDelete(enabled)
+    clickToDeleteEnabled = enabled
+    clearConn("clickToDeleteConn")
+    if enabled then
+        local mouse = LocalPlayer:GetMouse()
+        if not mouse then return end
+        local conn = mouse.Button1Down:Connect(function()
+            if not clickToDeleteEnabled then return end
+            if UserInputService:GetFocusedTextBox() then return end
+            local target = mouse.Target
+            if target and target:IsA("BasePart") then
+                if LocalPlayer.Character and target:IsDescendantOf(LocalPlayer.Character) then
+                    return
+                end
+                local partName = target.Name
+                pcall(function()
+                    target:Destroy()
+                end)
+                sendNotification("🖱️ Click Delete", "Dihapus: " .. tostring(partName), 1)
+            end
+        end)
+        setConn("clickToDeleteConn", conn)
+        sendNotification("🖱️ Click Delete", "Mode Klik Hapus Part DIAKTIFKAN", 2)
+    else
+        sendNotification("🖱️ Click Delete", "Mode Klik Hapus Part DIMATIKAN", 2)
+    end
+end
+
+-- ==========================================================
+-- DEVELOPER TOOLS LOADERS (Dark Dex, SimpleSpy, Infinite Yield)
+-- ==========================================================
+local function loadDarkDex()
+    sendNotification("📱 Dark Dex", "Sedang memuat Dark Dex Explorer...", 3)
+    task.spawn(function()
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Babyhamsta/RBLX_Scripts/main/Universal/BypassedDarkDexV3.lua"))()
+        end)
+        if not success then
+            local success2, _ = pcall(function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))()
+            end)
+            if not success2 then
+                sendNotification("❌ Dark Dex Gagal", tostring(err), 4)
+            end
+        end
+    end)
+end
+
+local function loadSimpleSpy()
+    sendNotification("🕵️ SimpleSpy", "Sedang memuat SimpleSpy Remote Logger...", 3)
+    task.spawn(function()
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/SimpleSpyV3/main.lua"))()
+        end)
+        if not success then
+            local success2, _ = pcall(function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
+            end)
+            if not success2 then
+                sendNotification("❌ SimpleSpy Gagal", tostring(err), 4)
+            end
+        end
+    end)
+end
+
+local function loadInfiniteYield()
+    sendNotification("⚡ Infinite Yield", "Sedang memuat Infinite Yield Admin...", 3)
+    task.spawn(function()
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+        end)
+        if not success then
+            sendNotification("❌ Infinite Yield Gagal", tostring(err), 4)
+        end
+    end)
 end
 
 -- Anti-Fling Function
@@ -1306,6 +1697,26 @@ local function CreateUI()
         end
     })
 
+    UIControls.Toggles["ShowFOV"] = CombatTab:CreateToggle({
+        Name = "Show FOV Circle",
+        CurrentValue = false,
+        Callback = setFOVCircle
+    })
+
+    UIControls.Sliders["AimbotRange"] = CombatTab:CreateSlider({
+        Name = "Aimbot & FOV Range",
+        Range = {30, 600},
+        Increment = 10,
+        Suffix = "studs",
+        CurrentValue = 150,
+        Callback = function(value)
+            aimbotRange = value
+            if flags.showFOV then
+                updateFOVCircle()
+            end
+        end
+    })
+
     CombatTab:CreateSection("Hitbox Expander")
 
     UIControls.Sliders["HitboxMultiplier"] = CombatTab:CreateSlider({
@@ -1355,6 +1766,106 @@ local function CreateUI()
         CurrentValue = 0.5,
         Callback = function(value)
             killAuraDelay = value
+        end
+    })
+
+    CombatTab:CreateSection("SpinBot / Anti-Aim")
+
+    UIControls.Toggles["SpinBot"] = CombatTab:CreateToggle({
+        Name = "SpinBot / Anti-Aim (ON / OFF)",
+        CurrentValue = false,
+        Callback = setSpinBot
+    })
+
+    UIControls.Sliders["SpinBotSpeed"] = CombatTab:CreateSlider({
+        Name = "SpinBot Speed",
+        Range = {5, 100},
+        Increment = 5,
+        Suffix = "Speed",
+        CurrentValue = 30,
+        Callback = function(val)
+            spinBotSpeed = val
+        end
+    })
+
+    CombatTab:CreateSection("Auto-Clicker / Fast Attack")
+
+    UIControls.Toggles["AutoClicker"] = CombatTab:CreateToggle({
+        Name = "Auto-Clicker / Fast Attack",
+        CurrentValue = false,
+        Callback = setAutoClicker
+    })
+
+    UIControls.Sliders["AutoClickDelay"] = CombatTab:CreateSlider({
+        Name = "Click Delay (Detik)",
+        Range = {0.01, 0.5},
+        Increment = 0.01,
+        Suffix = "s",
+        CurrentValue = 0.05,
+        Callback = function(val)
+            autoClickDelay = val
+        end
+    })
+
+    CombatTab:CreateSection("Universal Fling System")
+
+    local function getFlingPlayerOptions()
+        local options = {}
+        for _, name in ipairs(sortedPlayerNames()) do
+            table.insert(options, name)
+        end
+        return options
+    end
+
+    local FlingPlayerDropdown = CombatTab:CreateDropdown({
+        Name = "Pilih Target Fling",
+        Options = getFlingPlayerOptions(),
+        CurrentOption = {},
+        MultipleOptions = false,
+        Flag = "FlingPlayerDropdown",
+        Callback = function(option)
+            local opt = (typeof(option) == "table" and option[1]) or option
+            selectedFlingPlayerName = (opt == "") and nil or opt
+        end,
+    })
+
+    setConn("flingPlayerAdd", Players.PlayerAdded:Connect(function()
+        pcall(function() FlingPlayerDropdown:Refresh(getFlingPlayerOptions(), true) end)
+    end))
+    setConn("flingPlayerRem", Players.PlayerRemoving:Connect(function()
+        pcall(function() FlingPlayerDropdown:Refresh(getFlingPlayerOptions(), true) end)
+    end))
+
+    CombatTab:CreateButton({
+        Name = "💥 Fling Target (1x Serang)",
+        Callback = function()
+            if selectedFlingPlayerName and selectedFlingPlayerName ~= "" then
+                flingTargetPlayer(selectedFlingPlayerName, false)
+            else
+                sendNotification("Fling", "Pilih target terlebih dahulu!", 2)
+            end
+        end
+    })
+
+    UIControls.Toggles["LoopFling"] = CombatTab:CreateToggle({
+        Name = "🔄 Loop Fling Target",
+        CurrentValue = false,
+        Callback = function(enabled)
+            flags.flingLoop = enabled
+            if enabled then
+                if selectedFlingPlayerName and selectedFlingPlayerName ~= "" then
+                    flingTargetPlayer(selectedFlingPlayerName, true)
+                else
+                    sendNotification("Fling", "Pilih target terlebih dahulu!", 2)
+                end
+            end
+        end
+    })
+
+    CombatTab:CreateButton({
+        Name = "🌪️ Fling All Players (Lempar Semua)",
+        Callback = function()
+            flingAllPlayers()
         end
     })
 
@@ -1994,6 +2505,56 @@ local function CreateUI()
         for i=1,30 do savedSlots[i] = nil end
     end })
 
+    TeleportTab:CreateSection("Tween Teleport (Bypass Anti-Cheat)")
+
+    UIControls.Sliders["TweenSpeed"] = TeleportTab:CreateSlider({
+        Name = "Kecepatan Tween (Studs/Detik)",
+        Range = {30, 500},
+        Increment = 10,
+        Suffix = " studs/s",
+        CurrentValue = 150,
+        Flag = "TweenSpeedSlider",
+        Callback = function(val)
+            tweenTeleportSpeed = tonumber(val) or 150
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "🚀 Tween TP ke Pemain Terpilih",
+        Callback = function()
+            if not selectedPlayerName or selectedPlayerName == "" then
+                sendNotification("🚀 Tween TP", "Pilih pemain di daftar atas terlebih dahulu!", 2)
+                return
+            end
+            local target = Players:FindFirstChild(selectedPlayerName)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                local targetCF = CFrame.new(target.Character.HumanoidRootPart.Position + Vector3.new(0, 3, 0))
+                startTweenTeleport(targetCF)
+            else
+                sendNotification("🚀 Tween TP", "Pemain target tidak valid atau belum spawn!", 2)
+            end
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "🚀 Tween TP ke Slot Posisi Terpilih",
+        Callback = function()
+            if savedSlots[slotSelected] then
+                local targetCF = CFrame.new(savedSlots[slotSelected] + Vector3.new(0, 5, 0))
+                startTweenTeleport(targetCF)
+            else
+                sendNotification("🚀 Tween TP", "Slot " .. tostring(slotSelected) .. " belum memiliki posisi yang disimpan!", 2)
+            end
+        end
+    })
+
+    TeleportTab:CreateButton({
+        Name = "🛑 Batalkan / Stop Tween Teleport",
+        Callback = function()
+            cancelTweenTeleport()
+        end
+    })
+
     TeleportTab:CreateSection("Quick Floating Teleports (Slots 1 - 10)")
 
     local selectedWidgetSlot = 1
@@ -2493,7 +3054,52 @@ local function CreateUI()
         end
     end
 
-    -- 8. CONFIG & DATABASE TAB
+    -- 8. DEVELOPER & UTILITY TOOLS TAB
+    local DevTab = Window:CreateTab("Developer Tools", "terminal")
+    windows.Dev = DevTab
+
+    DevTab:CreateSection("Client-Side BTool (Delete Part / Wall Remover)")
+
+    DevTab:CreateButton({
+        Name = "🔨 Ambil BTool (Delete Part Tool ke Backpack)",
+        Callback = function()
+            giveBTool()
+        end
+    })
+
+    UIControls.Toggles["ClickToDelete"] = DevTab:CreateToggle({
+        Name = "🖱️ Mode Klik Hapus Part (Wall Remover)",
+        CurrentValue = false,
+        Flag = "ClickToDeleteToggle",
+        Callback = function(enabled)
+            setClickToDelete(enabled)
+        end
+    })
+
+    DevTab:CreateSection("Script & Explorer Loaders")
+
+    DevTab:CreateButton({
+        Name = "📱 Buka Dark Dex Explorer (Object & Part Viewer)",
+        Callback = function()
+            loadDarkDex()
+        end
+    })
+
+    DevTab:CreateButton({
+        Name = "🕵️ Buka SimpleSpy (Remote Event Logger)",
+        Callback = function()
+            loadSimpleSpy()
+        end
+    })
+
+    DevTab:CreateButton({
+        Name = "⚡ Buka Infinite Yield (Universal Admin)",
+        Callback = function()
+            loadInfiniteYield()
+        end
+    })
+
+    -- 9. CONFIG & DATABASE TAB
     local ConfigTab = Window:CreateTab("Config & Database", "save")
     windows.Config = ConfigTab
 
